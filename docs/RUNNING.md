@@ -134,10 +134,11 @@ Note: `connect-client.sh` auto-detects Windows OpenSSH (`ssh.exe`/`scp.exe`) and
 
 How password authentication works:
 - Script does **not** register users.
-- Script prompts only for login authentication (`Login user`, `Login password`).
+- Script always prompts for login authentication (`Login user`, `Login password`).
 - Credentials are validated **server-side** by `/opt/netlab/auth/validate_user.sh` against `/opt/netlab/auth/users.yml`.
 - The client does not read or require direct access to `users.yml`.
 - If authentication succeeds, VPN setup continues automatically.
+- If authentication fails, the client prints only: `Authentication failed: invalid user or password.`
 
 Pre-registered users source (extensible and gitignored):
 - `infra/ansible/group_vars/users.yml`
@@ -264,7 +265,7 @@ sudo wg show wg0
 - Profile file: `~/.config/netlab-wireguard/client.env`
 - Stored items: connection defaults and last login user
 - User/password are validated against server-side pre-registered user database
-- If password is wrong, setup aborts
+- If authentication fails, output is only: `Authentication failed: invalid user or password.`
 
 ### Supported script parameters
 

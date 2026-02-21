@@ -126,8 +126,8 @@ load_profile() {
 SERVER_ENDPOINT="${SERVER_ENDPOINT:-}"
 SERVER_SSH="${SERVER_SSH:-}"
 WG_IFACE="${WG_IFACE:-wg0}"
-LOGIN_USER="${LOGIN_USER:-${LAST_LOGIN_USER:-}}"
-LOGIN_PASSWORD="${LOGIN_PASSWORD:-}"
+LOGIN_USER=""
+LOGIN_PASSWORD=""
 
 load_profile
 
@@ -179,13 +179,18 @@ if [[ -z "${SSH_CMD}" || -z "${SCP_CMD}" || -z "${CURL_CMD}" ]]; then
   exit 1
 fi
 
-if [[ -z "${LOGIN_USER}" ]]; then
-  read -rp "Login user: " LOGIN_USER
+if [[ ! -r /dev/tty ]]; then
+  echo "Authentication failed: invalid user or password." >&2
+  exit 1
 fi
 
-if [[ -z "${LOGIN_PASSWORD}" ]]; then
-  read -rsp "Login password: " LOGIN_PASSWORD
-  echo
+read -rp "Login user: " LOGIN_USER < /dev/tty
+read -rsp "Login password: " LOGIN_PASSWORD < /dev/tty
+echo > /dev/tty
+
+if [[ -z "${LOGIN_USER}" || -z "${LOGIN_PASSWORD}" ]]; then
+  echo "Authentication failed: invalid user or password." >&2
+  exit 1
 fi
 
 ENTERED_HASH="$(hash_password "${LOGIN_PASSWORD}")"
