@@ -1,0 +1,14 @@
+services:
+  service1:
+    image: ${SERVICE_IMAGE:-netlab/service1:latest}
+    build:
+      context: .
+    container_name: service1
+    restart: unless-stopped
+    ports:
+      - "10.0.0.1:80:80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1"]
+      interval: 20s
+      timeout: 5s
+      retries: 3

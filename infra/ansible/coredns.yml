@@ -1,0 +1,68 @@
+---
+- name: Deploy CoreDNS on VPN server
+  hosts: wireguard_server
+  become: true
+  tasks:
+    - name: Ensure CoreDNS config directory exists
+      ansible.builtin.file:
+        path: /opt/netlab/coredns
+        state: directory
+        mode: "0755"
+
+    - name: Render CoreDNS Corefile
+      ansible.builtin.copy:
+        dest: /opt/netlab/coredns/Corefile
+        mode: "0644"
+        content: |
+          {{ dns_zone }}:53 {
+            bind {{ wireguard_server_ip }}
+              file /etc/coredns/zone.db
+              log
+              errors
+          }
+
+          .:53 {
+            bind {{ wireguard_server_ip }}
+              forward . 8.8.8.8 1.1.1.1
+              log
+              errors
+          }
+
+    - name: Render CoreDNS zone file
+      ansible.builtin.copy:
+        dest: /opt/netlab/coredns/zone.db
+        mode: "0644"
+        content: |
+          $ORIGIN {{ dns_zone }}.
+          $TTL 3600
+          @   IN SOA ns1.{{ dns_zone }}. admin.{{ dns_zone }}. (
+                  2026022101 ; serial
+                  3600       ; refresh
+                  1800       ; retry
+                  604800     ; expire
+                  86400      ; minimum
+          )
+          @         IN NS    ns1.{{ dns_zone }}.
+          ns1       IN A     {{ wireguard_server_ip }}
+          {{ service_hostname | regex_replace('\.' ~ dns_zone ~ '$', '') }}  IN A  {{ wireguard_server_ip }}
+          db        IN A     10.0.0.2
+
+    - name: Ensure CoreDNS image is present
+      ansible.builtin.command: docker pull {{ coredns_image }}
+      register: coredns_pull
+      changed_when: "'Downloaded' in coredns_pull.stdout or 'Pull complete' in coredns_pull.stdout"
+
+    - name: Remove previous CoreDNS container if exists
+      ansible.builtin.command: docker rm -f coredns
+      register: remove_coredns
+      failed_when: false
+      changed_when: remove_coredns.rc == 0
+
+    - name: Start CoreDNS container
+      ansible.builtin.command: >-
+        docker run -d --name coredns --restart unless-stopped --network host
+        -v /opt/netlab/coredns/Corefile:/etc/coredns/Corefile:ro
+        -v /opt/netlab/coredns/zone.db:/etc/coredns/zone.db:ro
+        {{ coredns_image }} -conf /etc/coredns/Corefile
+      register: coredns_run
+      changed_when: coredns_run.rc == 0

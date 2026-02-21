@@ -1,0 +1,16 @@
+wireguard_interface: wg0
+wireguard_port: 51820
+wireguard_subnet: 10.0.0.0/24
+wireguard_server_ip: 10.0.0.1
+wireguard_dns_ip: 10.0.0.1
+wireguard_allowed_ips: 10.0.0.0/24
+
+service_hostname: service1.intranet.local
+dns_zone: intranet.local
+service_host_ip: "{{ wireguard_server_ip }}"
+service_container_image: netlab/service1:latest
+coredns_image: coredns/coredns:1.12.0
+
+repo_root: "{{ playbook_dir }}/../.."
+coredns_config_src: "{{ repo_root }}/coredns/Corefile"
+coredns_zone_src: "{{ repo_root }}/coredns/zone.db"

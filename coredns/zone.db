@@ -1,0 +1,13 @@
+$ORIGIN intranet.local.
+$TTL 3600
+@   IN SOA ns1.intranet.local. admin.intranet.local. (
+        2026022101 ; serial
+        3600       ; refresh
+        1800       ; retry
+        604800     ; expire
+        86400      ; minimum
+)
+@       IN NS    ns1.intranet.local.
+ns1     IN A     10.0.0.1
+service1 IN A    10.0.0.1
+db      IN A     10.0.0.2

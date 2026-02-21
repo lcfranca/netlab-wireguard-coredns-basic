@@ -1,0 +1,22 @@
+# Copy this file to terraform.tfvars and adjust values.
+server_public_ip = "203.0.113.10"
+server_ssh_user  = "ubuntu"
+server_ssh_port  = 22
+server_ssh_private_key_file = "/home/your-user/.ssh/id_ed25519"
+
+client_hosts = [
+  {
+    name       = "client-1"
+    ansible_ip = "203.0.113.20"
+    ssh_user   = "ubuntu"
+    ssh_port   = 22
+    ssh_private_key_file = "/home/your-user/.ssh/id_ed25519"
+  }
+]
+
+wireguard_subnet    = "10.0.0.0/24"
+wireguard_server_ip = "10.0.0.1"
+dns_zone            = "intranet.local"
+service_hostname    = "service1.intranet.local"
+service_container_image = "netlab/service1:latest"
+coredns_image       = "coredns/coredns:1.12.0"

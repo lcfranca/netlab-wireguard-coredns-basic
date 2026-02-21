@@ -1,0 +1,61 @@
+---
+- name: Install and configure Docker engine
+  hosts: wireguard_server
+  become: true
+  tasks:
+    - name: Check whether Docker is already installed
+      ansible.builtin.command: docker --version
+      register: docker_version_check
+      changed_when: false
+      failed_when: false
+
+    - name: Install system dependencies
+      ansible.builtin.apt:
+        name:
+          - ca-certificates
+          - curl
+          - gnupg
+          - lsb-release
+        state: present
+        update_cache: true
+
+    - name: Install Docker engine packages
+      ansible.builtin.apt:
+        name:
+          - docker.io
+          - docker-compose-plugin
+        state: present
+        update_cache: true
+      when: docker_version_check.rc != 0
+
+    - name: Ensure Docker service is enabled and running
+      ansible.builtin.service:
+        name: docker
+        enabled: true
+        state: started
+
+    - name: Ensure deploy directory exists
+      ansible.builtin.file:
+        path: /opt/netlab
+        state: directory
+        mode: "0755"
+
+    - name: Copy docker assets
+      ansible.builtin.copy:
+        src: "{{ repo_root }}/docker"
+        dest: /opt/netlab/
+        mode: preserve
+
+    - name: Write compose environment file
+      ansible.builtin.copy:
+        dest: /opt/netlab/docker/.env
+        mode: "0644"
+        content: |
+          SERVICE_IMAGE={{ service_container_image }}
+
+    - name: Build and start service container
+      ansible.builtin.command: docker compose up -d --build
+      args:
+        chdir: /opt/netlab/docker
+      register: compose_up
+      changed_when: "'Running' in compose_up.stdout or 'Creating' in compose_up.stdout or 'Recreating' in compose_up.stdout"

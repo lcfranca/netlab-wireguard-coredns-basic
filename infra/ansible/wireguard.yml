@@ -1,0 +1,215 @@
+---
+- name: Configure WireGuard server and generate client profiles
+  hosts: wireguard_server
+  become: true
+  vars:
+    client_hosts: "{{ groups['wireguard_clients'] | default([]) }}"
+  tasks:
+    - name: Install WireGuard packages
+      ansible.builtin.apt:
+        name:
+          - wireguard
+          - wireguard-tools
+        state: present
+        update_cache: true
+
+    - name: Install required runtime and validation tools
+      ansible.builtin.apt:
+        name:
+          - curl
+          - dnsutils
+          - iproute2
+        state: present
+        update_cache: true
+
+    - name: Persist IPv4 forwarding setting
+      ansible.builtin.lineinfile:
+        path: /etc/sysctl.conf
+        regexp: '^net.ipv4.ip_forward\s*='
+        line: net.ipv4.ip_forward=1
+
+    - name: Apply IPv4 forwarding setting
+      ansible.builtin.command: sysctl -w net.ipv4.ip_forward=1
+      changed_when: false
+
+    - name: Ensure WireGuard directories exist
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0700"
+      loop:
+        - /etc/wireguard
+        - /etc/wireguard/clients
+        - /opt/netlab/wg-clients
+
+    - name: Check whether server private key exists
+      ansible.builtin.stat:
+        path: /etc/wireguard/server_private.key
+      register: server_private_key_stat
+
+    - name: Validate existing server private key
+      ansible.builtin.shell: set -euo pipefail; tr -d '\r\n[:space:]' < /etc/wireguard/server_private.key | wg pubkey >/dev/null
+      args:
+        executable: /bin/bash
+      register: existing_server_key_validation
+      changed_when: false
+      failed_when: false
+      when: server_private_key_stat.stat.exists
+
+    - name: Generate new server private key when missing or invalid
+      ansible.builtin.command: wg genkey
+      register: generated_server_key
+      changed_when: true
+      when: not server_private_key_stat.stat.exists or existing_server_key_validation.rc != 0
+
+    - name: Persist generated server private key
+      ansible.builtin.copy:
+        dest: /etc/wireguard/server_private.key
+        content: "{{ generated_server_key.stdout | trim }}\n"
+        mode: "0600"
+      when: generated_server_key is defined and generated_server_key.stdout is defined and (generated_server_key.stdout | trim | length > 0)
+
+    - name: Normalize server private key file format
+      ansible.builtin.shell: |
+        set -euo pipefail
+        key="$(tr -d '\r\n[:space:]' < /etc/wireguard/server_private.key)"
+        printf '%s\n' "${key}" > /etc/wireguard/server_private.key
+        chmod 600 /etc/wireguard/server_private.key
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+    - name: Read server private key
+      ansible.builtin.slurp:
+        path: /etc/wireguard/server_private.key
+      register: server_private_key
+
+    - name: Derive server public key
+      ansible.builtin.shell: set -euo pipefail; tr -d '\r\n[:space:]' < /etc/wireguard/server_private.key | wg pubkey
+      args:
+        executable: /bin/bash
+      register: server_public_key
+      changed_when: false
+
+    - name: Build client definitions
+      ansible.builtin.set_fact:
+        wireguard_clients_data: "{{ wireguard_clients_data | default([]) + [ {'name': item, 'ip': '10.0.0.' ~ (loop_index + 2) ~ '/32'} ] }}"
+      loop: "{{ client_hosts }}"
+      loop_control:
+        index_var: loop_index
+
+    - name: Generate private keys for clients
+      ansible.builtin.command: wg genkey
+      args:
+        creates: "/etc/wireguard/clients/{{ item.name }}.key"
+      register: generated_client_keys
+      changed_when: false
+      loop: "{{ wireguard_clients_data | default([]) }}"
+
+    - name: Persist newly generated client keys
+      ansible.builtin.copy:
+        dest: "/etc/wireguard/clients/{{ item.item.name }}.key"
+        content: "{{ item.stdout }}\n"
+        mode: "0600"
+      when: item.rc is defined and item.rc == 0 and item.stdout is defined and (item.stdout | trim | length > 0)
+      loop: "{{ generated_client_keys.results | default([]) }}"
+
+    - name: Derive client public keys
+      ansible.builtin.shell: set -euo pipefail; cat /etc/wireguard/clients/{{ item.name }}.key | wg pubkey
+      args:
+        executable: /bin/bash
+      register: client_public_keys
+      changed_when: false
+      loop: "{{ wireguard_clients_data | default([]) }}"
+
+    - name: Render server WireGuard configuration
+      ansible.builtin.copy:
+        dest: "/etc/wireguard/{{ wireguard_interface }}.conf"
+        mode: "0600"
+        content: |
+          [Interface]
+          Address = {{ wireguard_server_ip }}/24
+          ListenPort = {{ wireguard_port }}
+          PrivateKey = {{ server_private_key.content | b64decode | trim }}
+          SaveConfig = true
+
+          {% for client in client_public_keys.results | default([]) %}
+          [Peer]
+          PublicKey = {{ client.stdout | trim }}
+          AllowedIPs = {{ client.item.ip }}
+
+          {% endfor %}
+
+    - name: Enable and restart WireGuard service
+      ansible.builtin.systemd:
+        name: "wg-quick@{{ wireguard_interface }}"
+        enabled: true
+        state: restarted
+
+    - name: Ensure local intranet hostname resolves on server
+      ansible.builtin.lineinfile:
+        path: /etc/hosts
+        regexp: '^{{ wireguard_server_ip | regex_escape }}\s+{{ service_hostname | regex_escape }}$'
+        line: "{{ wireguard_server_ip }} {{ service_hostname }}"
+        state: present
+
+    - name: Generate client profile files
+      ansible.builtin.shell: |
+        set -euo pipefail
+        CLIENT_NAME="{{ item.name }}"
+        CLIENT_ADDR="{{ item.ip | regex_replace('/32$', '/24') }}"
+        CLIENT_KEY="$(cat /etc/wireguard/clients/${CLIENT_NAME}.key)"
+        cat > "/opt/netlab/wg-clients/${CLIENT_NAME}.conf" <<EOF
+        [Interface]
+        PrivateKey = ${CLIENT_KEY}
+        Address = ${CLIENT_ADDR}
+        DNS = {{ wireguard_dns_ip }}
+
+        [Peer]
+        PublicKey = {{ server_public_key.stdout | trim }}
+        Endpoint = {{ hostvars[inventory_hostname].ansible_host }}:{{ wireguard_port }}
+        AllowedIPs = {{ wireguard_allowed_ips }}
+        PersistentKeepalive = 25
+        EOF
+        chmod 600 "/opt/netlab/wg-clients/${CLIENT_NAME}.conf"
+      args:
+        executable: /bin/bash
+      loop: "{{ wireguard_clients_data | default([]) }}"
+      changed_when: true
+
+- name: Optionally install and apply WireGuard profiles on client hosts
+  hosts: wireguard_clients
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Install WireGuard packages
+      ansible.builtin.apt:
+        name:
+          - wireguard
+          - wireguard-tools
+        state: present
+        update_cache: true
+
+    - name: Ensure WireGuard directory exists
+      ansible.builtin.file:
+        path: /etc/wireguard
+        state: directory
+        mode: "0700"
+
+    - name: Read generated client profile from server
+      ansible.builtin.slurp:
+        path: "/opt/netlab/wg-clients/{{ inventory_hostname }}.conf"
+      delegate_to: "{{ groups['wireguard_server'][0] }}"
+      register: slurped_client_profile
+
+    - name: Deploy client profile
+      ansible.builtin.copy:
+        dest: "/etc/wireguard/{{ wireguard_interface }}.conf"
+        content: "{{ slurped_client_profile.content | b64decode }}"
+        mode: "0600"
+
+    - name: Enable and restart WireGuard service
+      ansible.builtin.systemd:
+        name: "wg-quick@{{ wireguard_interface }}"
+        enabled: true
+        state: restarted
