@@ -132,6 +132,9 @@ $u='https://raw.githubusercontent.com/lcfranca/netlab-wireguard-coredns-basic/ma
 
 Note: `connect-client.sh` auto-detects Windows OpenSSH (`ssh.exe`/`scp.exe`) and `curl.exe` when running in Git Bash or WSL-style shells, so manual PATH updates are not required.
 
+WSL note:
+- In WSL, use native Linux `ssh`/`scp`/`curl` packages (do not rely on Windows `.exe` binaries mounted under `/mnt/c`).
+
 How password authentication works:
 - Script does **not** register users.
 - Script always prompts for login authentication (`Login user`, `Login password`).

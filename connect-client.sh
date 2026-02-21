@@ -47,24 +47,22 @@ resolve_cmd() {
   fi
 
   local candidates=()
-  case "${cmd_name}" in
-    ssh|scp)
-      candidates+=(
-        "/c/Windows/System32/OpenSSH/${cmd_name}.exe"
-        "/c/Windows/SysNative/OpenSSH/${cmd_name}.exe"
-        "/mnt/c/Windows/System32/OpenSSH/${cmd_name}.exe"
-        "/mnt/c/Windows/Sysnative/OpenSSH/${cmd_name}.exe"
-      )
-      ;;
-    curl)
-      candidates+=(
-        "/c/Windows/System32/curl.exe"
-        "/c/Windows/SysNative/curl.exe"
-        "/mnt/c/Windows/System32/curl.exe"
-        "/mnt/c/Windows/Sysnative/curl.exe"
-      )
-      ;;
-  esac
+  if is_windows_shell; then
+    case "${cmd_name}" in
+      ssh|scp)
+        candidates+=(
+          "/c/Windows/System32/OpenSSH/${cmd_name}.exe"
+          "/c/Windows/SysNative/OpenSSH/${cmd_name}.exe"
+        )
+        ;;
+      curl)
+        candidates+=(
+          "/c/Windows/System32/curl.exe"
+          "/c/Windows/SysNative/curl.exe"
+        )
+        ;;
+    esac
+  fi
 
   local candidate
   for candidate in "${candidates[@]}"; do
@@ -74,7 +72,7 @@ resolve_cmd() {
     fi
   done
 
-  if [[ -n "${WINDIR:-}" ]]; then
+  if is_windows_shell && [[ -n "${WINDIR:-}" ]]; then
     case "${cmd_name}" in
       ssh|scp)
         candidate="${WINDIR}\\System32\\OpenSSH\\${cmd_name}.exe"
@@ -176,7 +174,11 @@ if [[ -z "${SSH_CMD}" || -z "${SCP_CMD}" || -z "${CURL_CMD}" ]]; then
   if is_wsl_shell; then
     echo "Detected WSL shell." >&2
   fi
-  echo "If on Windows, ensure OpenSSH Client is installed and accessible." >&2
+  if is_wsl_shell; then
+    echo "If on WSL, install native Linux tools: sudo apt/yum/pacman install openssh-client curl." >&2
+  else
+    echo "If on Windows, ensure OpenSSH Client is installed and accessible." >&2
+  fi
   exit 1
 fi
 
