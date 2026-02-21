@@ -188,18 +188,28 @@ read -rp "Login user: " LOGIN_USER < /dev/tty
 read -rsp "Login password: " LOGIN_PASSWORD < /dev/tty
 echo > /dev/tty
 
+LOGIN_USER="$(printf '%s' "${LOGIN_USER}" | tr -d '\r\n')"
+LOGIN_PASSWORD="$(printf '%s' "${LOGIN_PASSWORD}" | tr -d '\r\n')"
+
 if [[ -z "${LOGIN_USER}" || -z "${LOGIN_PASSWORD}" ]]; then
   echo "Authentication failed: invalid user or password." >&2
   exit 1
 fi
 
-ENTERED_HASH="$(hash_password "${LOGIN_PASSWORD}")"
-
-AUTH_CMD="sudo -n /opt/netlab/auth/validate_user.sh --username $(printf '%q' "${LOGIN_USER}") --password-hash $(printf '%q' "${ENTERED_HASH}")"
+AUTH_CMD="sudo -n /opt/netlab/auth/validate_user.sh --username $(printf '%q' "${LOGIN_USER}") --password $(printf '%q' "${LOGIN_PASSWORD}")"
 set +e
 AUTH_OUTPUT="$(${SSH_CMD} "${SERVER_SSH}" "${AUTH_CMD}" 2>/dev/null)"
 AUTH_STATUS=$?
 set -e
+
+if [[ ${AUTH_STATUS} -ne 0 ]]; then
+  ENTERED_HASH="$(hash_password "${LOGIN_PASSWORD}")"
+  AUTH_CMD_COMPAT="sudo -n /opt/netlab/auth/validate_user.sh --username $(printf '%q' "${LOGIN_USER}") --password-hash $(printf '%q' "${ENTERED_HASH}")"
+  set +e
+  AUTH_OUTPUT="$(${SSH_CMD} "${SERVER_SSH}" "${AUTH_CMD_COMPAT}" 2>/dev/null)"
+  AUTH_STATUS=$?
+  set -e
+fi
 
 if [[ ${AUTH_STATUS} -ne 0 ]]; then
   if [[ "${AUTH_OUTPUT}" == "SETUP_REQUIRED" ]]; then

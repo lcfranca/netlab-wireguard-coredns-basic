@@ -244,7 +244,12 @@
           set -euo pipefail
 
           USERNAME=""
-          PASSWORD_HASH=""
+          PASSWORD=""
+          LOG_FILE="/opt/netlab/auth/auth.log"
+
+          log_event() {
+            printf '%s user=%s status=%s\n' "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" "${USERNAME:-unknown}" "$1" >> "${LOG_FILE}" 2>/dev/null || true
+          }
 
           while [[ $# -gt 0 ]]; do
             case "$1" in
@@ -252,8 +257,8 @@
                 USERNAME="$2"
                 shift 2
                 ;;
-              --password-hash)
-                PASSWORD_HASH="$2"
+              --password|--password-hash)
+                PASSWORD="$2"
                 shift 2
                 ;;
               *)
@@ -263,13 +268,15 @@
             esac
           done
 
-          if [[ -z "${USERNAME}" || -z "${PASSWORD_HASH}" ]]; then
+          if [[ -z "${USERNAME}" || -z "${PASSWORD}" ]]; then
+            log_event "invalid_args"
             echo "INVALID_ARGS"
             exit 2
           fi
 
           DB_FILE="/opt/netlab/auth/users.yml"
           if [[ ! -f "${DB_FILE}" ]]; then
+            log_event "setup_required"
             echo "SETUP_REQUIRED"
             exit 3
           fi
@@ -296,6 +303,7 @@
           ' "${DB_FILE}")"
 
           if [[ -z "${USER_LINE}" ]]; then
+            log_event "auth_failed"
             echo "AUTH_FAILED"
             exit 4
           fi
@@ -303,10 +311,19 @@
           STORED_HASH="$(printf '%s' "${USER_LINE}" | awk -F: '{print $2}')"
           CLIENT_NAME="$(printf '%s' "${USER_LINE}" | awk -F: '{print $3}')"
 
-          if [[ "${PASSWORD_HASH}" != "${STORED_HASH}" ]]; then
+          if command -v sha256sum >/dev/null 2>&1; then
+            ENTERED_HASH="$(printf '%s' "${PASSWORD}" | sha256sum | awk '{print $1}')"
+          else
+            ENTERED_HASH="$(printf '%s' "${PASSWORD}" | shasum -a 256 | awk '{print $1}')"
+          fi
+
+          if [[ "${ENTERED_HASH}" != "${STORED_HASH}" ]]; then
+            log_event "auth_failed"
             echo "AUTH_FAILED"
             exit 4
           fi
+
+          log_event "auth_ok"
 
           printf '%s\n' "${CLIENT_NAME}"
 

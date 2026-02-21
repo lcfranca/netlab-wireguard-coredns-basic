@@ -149,6 +149,13 @@ Server generation step:
 - `make config` copies configured users to server-only `/opt/netlab/auth/users.yml` and installs `/opt/netlab/auth/validate_user.sh`.
 - Client authentication calls the validator through `sudo -n` on the server; the client never reads `users.yml` directly.
 
+Troubleshooting authentication failures:
+- Re-run `make config` to regenerate server-side auth assets and user profiles.
+- Ensure you enter login/password exactly; Windows CRLF input is normalized by the client script.
+- If server was provisioned with an older auth helper, re-running `make config` updates it; client also includes compatibility fallback during rollout.
+- Check server auth events in `/opt/netlab/auth/auth.log` (contains username + status only).
+- If credentials are invalid, client output is only: `Authentication failed: invalid user or password.`
+
 Local smoke-test users created by default:
 - Username: `demo` / Password: `Demo!Netlab#2026`
 - Username: `ops` / Password: `Ops!Netlab#2026`
