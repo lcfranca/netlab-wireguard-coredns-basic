@@ -118,20 +118,19 @@ If the client host is listed in `client_hosts`, `make config` provisions it auto
 
 ### Option B: Automated client script (recommended)
 
-Client connection (Unix/Linux/macOS):
+Unix/Linux/macOS one-liner:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/lcfranca/netlab-wireguard-coredns-basic/main/connect-client.sh | bash -s -- --server-endpoint 172.25.242.222:51820 --server-ssh subtilizer@172.25.242.222
 ```
 
-Client connection (Windows PowerShell + Git Bash):
+Windows PowerShell one-liner (auto-detects Git Bash or WSL):
 
 ```powershell
-PS> Invoke-WebRequest -Uri "https://raw.githubusercontent.com/lcfranca/netlab-wireguard-coredns-basic/main/connect-client.sh" -OutFile "connect-client.sh"
-PS> bash connect-client.sh --server-endpoint 172.25.242.222:51820 --server-ssh subtilizer@172.25.242.222
+$u='https://raw.githubusercontent.com/lcfranca/netlab-wireguard-coredns-basic/main/connect-client.sh'; $a='--server-endpoint 172.25.242.222:51820 --server-ssh subtilizer@172.25.242.222'; $b=(Get-Command bash -ErrorAction SilentlyContinue).Source; if(-not $b){$c=@("$env:ProgramFiles\Git\bin\bash.exe","$env:ProgramFiles\Git\usr\bin\bash.exe","$env:ProgramW6432\Git\bin\bash.exe","$env:ProgramW6432\Git\usr\bin\bash.exe"); $b=$c | Where-Object { Test-Path $_ } | Select-Object -First 1}; if($b){ & $b -lc "curl -fsSL $u | bash -s -- $a" } elseif(Get-Command wsl -ErrorAction SilentlyContinue){ wsl bash -lc "curl -fsSL $u | bash -s -- $a" } else { throw 'Bash runtime not found. Install Git for Windows or WSL.' }
 ```
 
-Note: `connect-client.sh` auto-detects Windows OpenSSH and `curl.exe` paths when running under Git Bash, so manual PATH edits are not required.
+Note: `connect-client.sh` auto-detects Windows OpenSSH (`ssh.exe`/`scp.exe`) and `curl.exe` when running in Git Bash or WSL-style shells, so manual PATH updates are not required.
 
 How password authentication works:
 - Script does **not** register users.
@@ -227,14 +226,13 @@ Unix/Linux/macOS:
 curl -fsSL https://raw.githubusercontent.com/lcfranca/netlab-wireguard-coredns-basic/main/connect-client.sh | bash -s -- --server-endpoint 172.25.242.222:51820 --server-ssh subtilizer@172.25.242.222
 ```
 
-Windows (PowerShell + Git Bash):
+Windows PowerShell:
 
 ```powershell
-PS> Invoke-WebRequest -Uri "https://raw.githubusercontent.com/lcfranca/netlab-wireguard-coredns-basic/main/connect-client.sh" -OutFile "connect-client.sh"
-PS> bash connect-client.sh --server-endpoint 172.25.242.222:51820 --server-ssh subtilizer@172.25.242.222
+$u='https://raw.githubusercontent.com/lcfranca/netlab-wireguard-coredns-basic/main/connect-client.sh'; $a='--server-endpoint 172.25.242.222:51820 --server-ssh subtilizer@172.25.242.222'; $b=(Get-Command bash -ErrorAction SilentlyContinue).Source; if(-not $b){$c=@("$env:ProgramFiles\Git\bin\bash.exe","$env:ProgramFiles\Git\usr\bin\bash.exe","$env:ProgramW6432\Git\bin\bash.exe","$env:ProgramW6432\Git\usr\bin\bash.exe"); $b=$c | Where-Object { Test-Path $_ } | Select-Object -First 1}; if($b){ & $b -lc "curl -fsSL $u | bash -s -- $a" } elseif(Get-Command wsl -ErrorAction SilentlyContinue){ wsl bash -lc "curl -fsSL $u | bash -s -- $a" } else { throw 'Bash runtime not found. Install Git for Windows or WSL.' }
 ```
 
-Note: the script automatically resolves `ssh.exe`/`scp.exe` from Windows OpenSSH when Git Bash PATH does not include them.
+Note: the script automatically resolves `ssh.exe`/`scp.exe` and `curl.exe` from Windows locations when Git Bash PATH does not include them.
 
 If script shows `Missing required command: wg`:
 - Install WireGuard for Windows: https://www.wireguard.com/install/

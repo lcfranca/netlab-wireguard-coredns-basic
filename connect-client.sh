@@ -9,12 +9,11 @@ usage() {
 Usage:
   connect-client.sh --server-endpoint <ip:port> --server-ssh <user@host> [options]
 
-Unix/Linux/macOS:
+Unix/Linux/macOS one-liner:
   curl -fsSL https://raw.githubusercontent.com/lcfranca/netlab-wireguard-coredns-basic/main/connect-client.sh | bash -s -- --server-endpoint 172.25.242.222:51820 --server-ssh subtilizer@172.25.242.222
 
-Windows (PowerShell):
-  Invoke-WebRequest -Uri "https://raw.githubusercontent.com/lcfranca/netlab-wireguard-coredns-basic/main/connect-client.sh" -OutFile "connect-client.sh"
-  bash connect-client.sh --server-endpoint 172.25.242.222:51820 --server-ssh subtilizer@172.25.242.222
+Windows PowerShell one-liner (auto-detects Git Bash/WSL):
+  $u='https://raw.githubusercontent.com/lcfranca/netlab-wireguard-coredns-basic/main/connect-client.sh'; $a='--server-endpoint 172.25.242.222:51820 --server-ssh subtilizer@172.25.242.222'; $b=(Get-Command bash -ErrorAction SilentlyContinue).Source; if(-not $b){$c=@("$env:ProgramFiles\\Git\\bin\\bash.exe","$env:ProgramFiles\\Git\\usr\\bin\\bash.exe","$env:ProgramW6432\\Git\\bin\\bash.exe","$env:ProgramW6432\\Git\\usr\\bin\\bash.exe"); $b=$c | Where-Object { Test-Path $_ } | Select-Object -First 1}; if($b){ & $b -lc "curl -fsSL $u | bash -s -- $a" } elseif(Get-Command wsl -ErrorAction SilentlyContinue){ wsl bash -lc "curl -fsSL $u | bash -s -- $a" } else { throw 'Bash runtime not found. Install Git for Windows or WSL.' }
 
 Options:
   --server-endpoint <ip:port>      WireGuard endpoint (required)
@@ -27,39 +26,69 @@ Authentication:
 EOF
 }
 
-require_cmd() {
-  command -v "$1" >/dev/null 2>&1 || {
-    echo "Missing required command: $1" >&2
-    exit 1
-  }
+is_windows_shell() {
+  case "$(uname -s 2>/dev/null || true)" in
+    MINGW*|MSYS*|CYGWIN*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+is_wsl_shell() {
+  [[ -f /proc/version ]] && grep -qiE 'microsoft|wsl' /proc/version
 }
 
 resolve_cmd() {
   local cmd_name="$1"
+
   if command -v "${cmd_name}" >/dev/null 2>&1; then
     command -v "${cmd_name}"
     return 0
   fi
 
-  if is_windows_shell; then
+  local candidates=()
+  case "${cmd_name}" in
+    ssh|scp)
+      candidates+=(
+        "/c/Windows/System32/OpenSSH/${cmd_name}.exe"
+        "/c/Windows/SysNative/OpenSSH/${cmd_name}.exe"
+        "/mnt/c/Windows/System32/OpenSSH/${cmd_name}.exe"
+        "/mnt/c/Windows/Sysnative/OpenSSH/${cmd_name}.exe"
+      )
+      ;;
+    curl)
+      candidates+=(
+        "/c/Windows/System32/curl.exe"
+        "/c/Windows/SysNative/curl.exe"
+        "/mnt/c/Windows/System32/curl.exe"
+        "/mnt/c/Windows/Sysnative/curl.exe"
+      )
+      ;;
+  esac
+
+  local candidate
+  for candidate in "${candidates[@]}"; do
+    if [[ -x "${candidate}" ]]; then
+      printf '%s\n' "${candidate}"
+      return 0
+    fi
+  done
+
+  if [[ -n "${WINDIR:-}" ]]; then
     case "${cmd_name}" in
       ssh|scp)
-        for candidate in "/c/Windows/System32/OpenSSH/${cmd_name}.exe" "/c/Windows/SysNative/OpenSSH/${cmd_name}.exe"; do
-          if [[ -x "${candidate}" ]]; then
-            printf '%s\n' "${candidate}"
-            return 0
-          fi
-        done
+        candidate="${WINDIR}\\System32\\OpenSSH\\${cmd_name}.exe"
         ;;
       curl)
-        for candidate in "/c/Windows/System32/curl.exe" "/c/Windows/SysNative/curl.exe"; do
-          if [[ -x "${candidate}" ]]; then
-            printf '%s\n' "${candidate}"
-            return 0
-          fi
-        done
+        candidate="${WINDIR}\\System32\\curl.exe"
+        ;;
+      *)
+        candidate=""
         ;;
     esac
+    if [[ -n "${candidate}" && -x "${candidate}" ]]; then
+      printf '%s\n' "${candidate}"
+      return 0
+    fi
   fi
 
   return 1
@@ -72,13 +101,6 @@ hash_password() {
   else
     printf '%s' "${value}" | shasum -a 256 | awk '{print $1}'
   fi
-}
-
-is_windows_shell() {
-  case "$(uname -s 2>/dev/null || true)" in
-    MINGW*|MSYS*|CYGWIN*) return 0 ;;
-    *) return 1 ;;
-  esac
 }
 
 save_profile() {
@@ -111,11 +133,27 @@ load_profile
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --server-endpoint) SERVER_ENDPOINT="$2"; shift 2 ;;
-    --server-ssh) SERVER_SSH="$2"; shift 2 ;;
-    --interface) WG_IFACE="$2"; shift 2 ;;
-    -h|--help) usage; exit 0 ;;
-    *) echo "Unknown argument: $1" >&2; usage; exit 1 ;;
+    --server-endpoint)
+      SERVER_ENDPOINT="$2"
+      shift 2
+      ;;
+    --server-ssh)
+      SERVER_SSH="$2"
+      shift 2
+      ;;
+    --interface)
+      WG_IFACE="$2"
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "Unknown argument: $1" >&2
+      usage
+      exit 1
+      ;;
   esac
 done
 
@@ -126,9 +164,20 @@ SSH_CMD="$(resolve_cmd ssh || true)"
 SCP_CMD="$(resolve_cmd scp || true)"
 CURL_CMD="$(resolve_cmd curl || true)"
 
-[[ -n "${SSH_CMD}" ]] || { echo "Missing required command: ssh" >&2; exit 1; }
-[[ -n "${SCP_CMD}" ]] || { echo "Missing required command: scp" >&2; exit 1; }
-[[ -n "${CURL_CMD}" ]] || { echo "Missing required command: curl" >&2; exit 1; }
+if [[ -z "${SSH_CMD}" || -z "${SCP_CMD}" || -z "${CURL_CMD}" ]]; then
+  [[ -n "${SSH_CMD}" ]] || echo "Missing required command: ssh" >&2
+  [[ -n "${SCP_CMD}" ]] || echo "Missing required command: scp" >&2
+  [[ -n "${CURL_CMD}" ]] || echo "Missing required command: curl" >&2
+  echo "Shell: $(uname -s 2>/dev/null || echo unknown)" >&2
+  if is_windows_shell; then
+    echo "Detected Git Bash/MSYS/Cygwin shell." >&2
+  fi
+  if is_wsl_shell; then
+    echo "Detected WSL shell." >&2
+  fi
+  echo "If on Windows, ensure OpenSSH Client is installed and accessible." >&2
+  exit 1
+fi
 
 if [[ -z "${LOGIN_USER}" ]]; then
   read -rp "Login user: " LOGIN_USER
@@ -166,6 +215,7 @@ USER_LINE="$(printf '%s\n' "${USER_DB_CONTENT}" | awk -v u="${LOGIN_USER}" '
     }
   }
 ')"
+
 if [[ -z "${USER_LINE}" ]]; then
   echo "Authentication failed: unknown user '${LOGIN_USER}'" >&2
   exit 1
@@ -198,7 +248,7 @@ save_profile
 echo "Authenticated as ${LOGIN_USER}."
 
 if ! command -v wg >/dev/null 2>&1; then
-  if is_windows_shell; then
+  if is_windows_shell || is_wsl_shell; then
     cat <<EOF
 WireGuard CLI (wg) is not installed in this shell.
 Install WireGuard for Windows:
