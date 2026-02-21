@@ -34,6 +34,37 @@ require_cmd() {
   }
 }
 
+resolve_cmd() {
+  local cmd_name="$1"
+  if command -v "${cmd_name}" >/dev/null 2>&1; then
+    command -v "${cmd_name}"
+    return 0
+  fi
+
+  if is_windows_shell; then
+    case "${cmd_name}" in
+      ssh|scp)
+        for candidate in "/c/Windows/System32/OpenSSH/${cmd_name}.exe" "/c/Windows/SysNative/OpenSSH/${cmd_name}.exe"; do
+          if [[ -x "${candidate}" ]]; then
+            printf '%s\n' "${candidate}"
+            return 0
+          fi
+        done
+        ;;
+      curl)
+        for candidate in "/c/Windows/System32/curl.exe" "/c/Windows/SysNative/curl.exe"; do
+          if [[ -x "${candidate}" ]]; then
+            printf '%s\n' "${candidate}"
+            return 0
+          fi
+        done
+        ;;
+    esac
+  fi
+
+  return 1
+}
+
 hash_password() {
   local value="$1"
   if command -v sha256sum >/dev/null 2>&1; then
@@ -91,9 +122,13 @@ done
 [[ -n "${SERVER_ENDPOINT}" ]] || { echo "--server-endpoint is required" >&2; exit 1; }
 [[ -n "${SERVER_SSH}" ]] || { echo "--server-ssh is required" >&2; exit 1; }
 
-require_cmd ssh
-require_cmd scp
-require_cmd curl
+SSH_CMD="$(resolve_cmd ssh || true)"
+SCP_CMD="$(resolve_cmd scp || true)"
+CURL_CMD="$(resolve_cmd curl || true)"
+
+[[ -n "${SSH_CMD}" ]] || { echo "Missing required command: ssh" >&2; exit 1; }
+[[ -n "${SCP_CMD}" ]] || { echo "Missing required command: scp" >&2; exit 1; }
+[[ -n "${CURL_CMD}" ]] || { echo "Missing required command: curl" >&2; exit 1; }
 
 if [[ -z "${LOGIN_USER}" ]]; then
   read -rp "Login user: " LOGIN_USER
@@ -104,7 +139,7 @@ if [[ -z "${LOGIN_PASSWORD}" ]]; then
   echo
 fi
 
-USER_DB_CONTENT="$(ssh "${SERVER_SSH}" "cat /opt/netlab/auth/users.yml" 2>/dev/null || true)"
+USER_DB_CONTENT="$(${SSH_CMD} "${SERVER_SSH}" "cat /opt/netlab/auth/users.yml" 2>/dev/null || true)"
 if [[ -z "${USER_DB_CONTENT}" ]]; then
   echo "Could not read server user database at /opt/netlab/auth/users.yml" >&2
   echo "Run make config on server first to generate pre-registered user profiles." >&2
@@ -155,7 +190,7 @@ mkdir -p "${WORK_DIR}"
 chmod 700 "${WORK_DIR}"
 CLIENT_CONF_PATH="${WORK_DIR}/${WG_IFACE}.conf"
 
-scp "${SERVER_SSH}:/opt/netlab/wg-clients/${CLIENT_PROFILE_NAME}.conf" "${CLIENT_CONF_PATH}" >/dev/null
+${SCP_CMD} "${SERVER_SSH}:/opt/netlab/wg-clients/${CLIENT_PROFILE_NAME}.conf" "${CLIENT_CONF_PATH}" >/dev/null
 chmod 600 "${CLIENT_CONF_PATH}"
 
 save_profile
@@ -194,7 +229,7 @@ else
   systemctl enable --now "wg-quick@${WG_IFACE}"
 fi
 
-curl -sS --fail "http://service1.intranet.local" >/dev/null
+${CURL_CMD} -sS --fail "http://service1.intranet.local" >/dev/null
 
 echo "VPN is connected and intranet access is working."
 echo "Open in browser: http://service1.intranet.local"

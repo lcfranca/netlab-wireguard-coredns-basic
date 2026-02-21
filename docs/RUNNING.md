@@ -131,6 +131,8 @@ PS> Invoke-WebRequest -Uri "https://raw.githubusercontent.com/lcfranca/netlab-wi
 PS> bash connect-client.sh --server-endpoint 172.25.242.222:51820 --server-ssh subtilizer@172.25.242.222
 ```
 
+Note: `connect-client.sh` auto-detects Windows OpenSSH and `curl.exe` paths when running under Git Bash, so manual PATH edits are not required.
+
 How password authentication works:
 - Script does **not** register users.
 - Script prompts only for login authentication (`Login user`, `Login password`).
@@ -231,6 +233,8 @@ Windows (PowerShell + Git Bash):
 PS> Invoke-WebRequest -Uri "https://raw.githubusercontent.com/lcfranca/netlab-wireguard-coredns-basic/main/connect-client.sh" -OutFile "connect-client.sh"
 PS> bash connect-client.sh --server-endpoint 172.25.242.222:51820 --server-ssh subtilizer@172.25.242.222
 ```
+
+Note: the script automatically resolves `ssh.exe`/`scp.exe` from Windows OpenSSH when Git Bash PATH does not include them.
 
 If script shows `Missing required command: wg`:
 - Install WireGuard for Windows: https://www.wireguard.com/install/
