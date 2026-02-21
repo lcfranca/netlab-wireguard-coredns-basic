@@ -130,10 +130,19 @@ Windows PowerShell one-liner (auto-detects Git Bash or WSL):
 $u='https://raw.githubusercontent.com/lcfranca/netlab-wireguard-coredns-basic/main/connect-client.sh'; $a='--server-endpoint 172.25.242.222:51820 --server-ssh subtilizer@172.25.242.222'; $b=(Get-Command bash -ErrorAction SilentlyContinue).Source; if(-not $b){$c=@("$env:ProgramFiles\Git\bin\bash.exe","$env:ProgramFiles\Git\usr\bin\bash.exe","$env:ProgramW6432\Git\bin\bash.exe","$env:ProgramW6432\Git\usr\bin\bash.exe"); $b=$c | Where-Object { Test-Path $_ } | Select-Object -First 1}; if($b){ & $b -lc "curl -fsSL $u | bash -s -- $a" } elseif(Get-Command wsl -ErrorAction SilentlyContinue){ wsl bash -lc "curl -fsSL $u | bash -s -- $a" } else { throw 'Bash runtime not found. Install Git for Windows or WSL.' }
 ```
 
-Note: `connect-client.sh` auto-detects Windows OpenSSH (`ssh.exe`/`scp.exe`) and `curl.exe` when running in Git Bash or WSL-style shells, so manual PATH updates are not required.
+Note: `connect-client.sh` auto-detects Windows OpenSSH (`ssh.exe`/`scp.exe`) and `curl.exe` when running in Git Bash. In WSL, use native Linux tools.
 
 WSL note:
 - In WSL, use native Linux `ssh`/`scp`/`curl` packages (do not rely on Windows `.exe` binaries mounted under `/mnt/c`).
+
+Dependency auto-install behavior:
+- The script checks `ssh`, `scp`, and `curl` before authentication.
+- On Linux/WSL, if any are missing, it attempts installation automatically using the detected package manager:
+	- Debian/Ubuntu: `apt-get install -y openssh-client curl`
+	- Fedora/CentOS/RHEL: `dnf` or `yum install -y openssh-clients curl`
+	- Arch: `pacman -Sy --noconfirm openssh curl`
+- On Windows Git Bash, it uses OpenSSH and curl from Windows when available.
+- If automatic installation is not possible, the script prints exact manual install commands for the detected platform.
 
 How password authentication works:
 - Script does **not** register users.

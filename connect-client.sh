@@ -35,7 +35,110 @@ is_windows_shell() {
 }
 
 is_wsl_shell() {
-  [[ -f /proc/version ]] && grep -qiE 'microsoft|wsl' /proc/version
+  if [[ -r /proc/version ]]; then
+    local proc_version
+    proc_version="$(< /proc/version)"
+    shopt -s nocasematch
+    [[ "${proc_version}" == *microsoft* || "${proc_version}" == *wsl* ]]
+    local is_wsl=$?
+    shopt -u nocasematch
+    return ${is_wsl}
+  fi
+  return 1
+}
+
+detect_package_manager() {
+  if command -v apt-get >/dev/null 2>&1; then
+    printf '%s\n' apt-get
+    return 0
+  fi
+  if command -v dnf >/dev/null 2>&1; then
+    printf '%s\n' dnf
+    return 0
+  fi
+  if command -v yum >/dev/null 2>&1; then
+    printf '%s\n' yum
+    return 0
+  fi
+  if command -v pacman >/dev/null 2>&1; then
+    printf '%s\n' pacman
+    return 0
+  fi
+  return 1
+}
+
+run_with_sudo_if_needed() {
+  if [[ "${EUID}" -eq 0 ]]; then
+    "$@"
+    return $?
+  fi
+
+  if command -v sudo >/dev/null 2>&1; then
+    sudo "$@"
+    return $?
+  fi
+
+  return 127
+}
+
+auto_install_dependencies() {
+  local package_manager
+  package_manager="$(detect_package_manager || true)"
+
+  if [[ -z "${package_manager}" ]]; then
+    return 2
+  fi
+
+  case "${package_manager}" in
+    apt-get)
+      run_with_sudo_if_needed apt-get update -y >/dev/null 2>&1 || return 3
+      run_with_sudo_if_needed apt-get install -y openssh-client curl >/dev/null 2>&1 || return 3
+      ;;
+    dnf)
+      run_with_sudo_if_needed dnf install -y openssh-clients curl >/dev/null 2>&1 || return 3
+      ;;
+    yum)
+      run_with_sudo_if_needed yum install -y openssh-clients curl >/dev/null 2>&1 || return 3
+      ;;
+    pacman)
+      run_with_sudo_if_needed pacman -Sy --noconfirm openssh curl >/dev/null 2>&1 || return 3
+      ;;
+    *)
+      return 2
+      ;;
+  esac
+
+  return 0
+}
+
+print_dependency_help() {
+  echo "Unable to auto-install required commands: ssh scp curl" >&2
+  if is_windows_shell; then
+    echo "Git Bash/Windows detected. Ensure OpenSSH Client and curl are installed and available." >&2
+    echo "PowerShell: Get-WindowsCapability -Online | findstr OpenSSH.Client" >&2
+    echo "PowerShell (Admin): Add-WindowsCapability -Online -Name OpenSSH.Client~~~~0.0.1.0" >&2
+    return
+  fi
+
+  local package_manager
+  package_manager="$(detect_package_manager || true)"
+  case "${package_manager}" in
+    apt-get)
+      echo "Try: sudo apt-get update -y && sudo apt-get install -y openssh-client curl" >&2
+      ;;
+    dnf)
+      echo "Try: sudo dnf install -y openssh-clients curl" >&2
+      ;;
+    yum)
+      echo "Try: sudo yum install -y openssh-clients curl" >&2
+      ;;
+    pacman)
+      echo "Try: sudo pacman -Sy --noconfirm openssh curl" >&2
+      ;;
+    *)
+      echo "Install openssh client tools and curl using your distribution package manager." >&2
+      ;;
+  esac
 }
 
 resolve_cmd() {
@@ -164,22 +267,27 @@ SCP_CMD="$(resolve_cmd scp || true)"
 CURL_CMD="$(resolve_cmd curl || true)"
 
 if [[ -z "${SSH_CMD}" || -z "${SCP_CMD}" || -z "${CURL_CMD}" ]]; then
-  [[ -n "${SSH_CMD}" ]] || echo "Missing required command: ssh" >&2
-  [[ -n "${SCP_CMD}" ]] || echo "Missing required command: scp" >&2
-  [[ -n "${CURL_CMD}" ]] || echo "Missing required command: curl" >&2
-  echo "Shell: $(uname -s 2>/dev/null || echo unknown)" >&2
-  if is_windows_shell; then
-    echo "Detected Git Bash/MSYS/Cygwin shell." >&2
+  if ! is_windows_shell; then
+    auto_install_dependencies || true
+    SSH_CMD="$(resolve_cmd ssh || true)"
+    SCP_CMD="$(resolve_cmd scp || true)"
+    CURL_CMD="$(resolve_cmd curl || true)"
   fi
-  if is_wsl_shell; then
-    echo "Detected WSL shell." >&2
+
+  if [[ -z "${SSH_CMD}" || -z "${SCP_CMD}" || -z "${CURL_CMD}" ]]; then
+    [[ -n "${SSH_CMD}" ]] || echo "Missing required command: ssh" >&2
+    [[ -n "${SCP_CMD}" ]] || echo "Missing required command: scp" >&2
+    [[ -n "${CURL_CMD}" ]] || echo "Missing required command: curl" >&2
+    echo "Shell: $(uname -s 2>/dev/null || echo unknown)" >&2
+    if is_windows_shell; then
+      echo "Detected Git Bash/MSYS/Cygwin shell." >&2
+    fi
+    if is_wsl_shell; then
+      echo "Detected WSL shell." >&2
+    fi
+    print_dependency_help
+    exit 1
   fi
-  if is_wsl_shell; then
-    echo "If on WSL, install native Linux tools: sudo apt/yum/pacman install openssh-client curl." >&2
-  else
-    echo "If on Windows, ensure OpenSSH Client is installed and accessible." >&2
-  fi
-  exit 1
 fi
 
 if [[ ! -r /dev/tty ]]; then
