@@ -245,6 +245,7 @@
 
           USERNAME=""
           PASSWORD=""
+          USE_STDIN="0"
           LOG_FILE="/opt/netlab/auth/auth.log"
 
           log_event() {
@@ -261,12 +262,24 @@
                 PASSWORD="$2"
                 shift 2
                 ;;
+              --stdin)
+                USE_STDIN="1"
+                shift
+                ;;
               *)
                 echo "INVALID_ARGS"
                 exit 2
                 ;;
             esac
           done
+
+          if [[ "${USE_STDIN}" == "1" ]]; then
+            IFS= read -r USERNAME || true
+            IFS= read -r PASSWORD || true
+          fi
+
+          USERNAME="$(printf '%s' "${USERNAME}" | tr -d '\r\n')"
+          PASSWORD="$(printf '%s' "${PASSWORD}" | tr -d '\r\n')"
 
           if [[ -z "${USERNAME}" || -z "${PASSWORD}" ]]; then
             log_event "invalid_args"

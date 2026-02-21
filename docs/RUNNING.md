@@ -137,6 +137,7 @@ How password authentication works:
 - Script always prompts for login authentication (`Login user`, `Login password`).
 - Credentials are validated **server-side** by `/opt/netlab/auth/validate_user.sh` against `/opt/netlab/auth/users.yml`.
 - The client does not read or require direct access to `users.yml`.
+- Client sends login/password to the validator over SSH stdin (prevents shell quoting issues with special characters).
 - If authentication succeeds, VPN setup continues automatically.
 - If authentication fails, the client prints only: `Authentication failed: invalid user or password.`
 

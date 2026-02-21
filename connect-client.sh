@@ -196,9 +196,9 @@ if [[ -z "${LOGIN_USER}" || -z "${LOGIN_PASSWORD}" ]]; then
   exit 1
 fi
 
-AUTH_CMD="sudo -n /opt/netlab/auth/validate_user.sh --username $(printf '%q' "${LOGIN_USER}") --password $(printf '%q' "${LOGIN_PASSWORD}")"
+AUTH_CMD="sudo -n /opt/netlab/auth/validate_user.sh --stdin"
 set +e
-AUTH_OUTPUT="$(${SSH_CMD} "${SERVER_SSH}" "${AUTH_CMD}" 2>/dev/null)"
+AUTH_OUTPUT="$(printf '%s\n%s\n' "${LOGIN_USER}" "${LOGIN_PASSWORD}" | ${SSH_CMD} "${SERVER_SSH}" "${AUTH_CMD}" 2>/dev/null)"
 AUTH_STATUS=$?
 set -e
 
