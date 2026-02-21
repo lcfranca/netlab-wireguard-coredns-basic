@@ -188,50 +188,26 @@ if [[ -z "${LOGIN_PASSWORD}" ]]; then
   echo
 fi
 
-USER_DB_CONTENT="$(${SSH_CMD} "${SERVER_SSH}" "cat /opt/netlab/auth/users.yml" 2>/dev/null || true)"
-if [[ -z "${USER_DB_CONTENT}" ]]; then
-  echo "Could not read server user database at /opt/netlab/auth/users.yml" >&2
-  echo "Run make config on server first to generate pre-registered user profiles." >&2
-  exit 1
-fi
-
-USER_LINE="$(printf '%s\n' "${USER_DB_CONTENT}" | awk -v u="${LOGIN_USER}" '
-  /^[[:space:]]*-[[:space:]]+username:[[:space:]]*/ {
-    user=$3
-    gsub(/["'\''[:space:]]/, "", user)
-    hash=""
-    client=""
-  }
-  /^[[:space:]]*password_hash:[[:space:]]*/ {
-    hash=$2
-    gsub(/["'\''[:space:]]/, "", hash)
-  }
-  /^[[:space:]]*client_name:[[:space:]]*/ {
-    client=$2
-    gsub(/["'\''[:space:]]/, "", client)
-    if (user == u && hash != "" && client != "") {
-      print user ":" hash ":" client
-      exit
-    }
-  }
-')"
-
-if [[ -z "${USER_LINE}" ]]; then
-  echo "Authentication failed: unknown user '${LOGIN_USER}'" >&2
-  exit 1
-fi
-
-STORED_HASH="$(printf '%s' "${USER_LINE}" | awk -F: '{print $2}')"
-CLIENT_PROFILE_NAME="$(printf '%s' "${USER_LINE}" | awk -F: '{print $3}')"
-
-if [[ -z "${STORED_HASH}" || -z "${CLIENT_PROFILE_NAME}" ]]; then
-  echo "Invalid user database format on server." >&2
-  exit 1
-fi
-
 ENTERED_HASH="$(hash_password "${LOGIN_PASSWORD}")"
-if [[ "${ENTERED_HASH}" != "${STORED_HASH}" ]]; then
-  echo "Authentication failed: invalid password." >&2
+
+AUTH_CMD="sudo -n /opt/netlab/auth/validate_user.sh --username $(printf '%q' "${LOGIN_USER}") --password-hash $(printf '%q' "${ENTERED_HASH}")"
+set +e
+AUTH_OUTPUT="$(${SSH_CMD} "${SERVER_SSH}" "${AUTH_CMD}" 2>/dev/null)"
+AUTH_STATUS=$?
+set -e
+
+if [[ ${AUTH_STATUS} -ne 0 ]]; then
+  if [[ "${AUTH_OUTPUT}" == "SETUP_REQUIRED" ]]; then
+    echo "Server-side user database is not initialized. Run make config on server first." >&2
+    exit 1
+  fi
+  echo "Authentication failed: invalid user or password." >&2
+  exit 1
+fi
+
+CLIENT_PROFILE_NAME="${AUTH_OUTPUT##*$'\n'}"
+if [[ -z "${CLIENT_PROFILE_NAME}" ]]; then
+  echo "Authentication failed: invalid server auth response." >&2
   exit 1
 fi
 

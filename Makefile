@@ -11,13 +11,16 @@ TF_DIR := $(ROOT_DIR)/infra/terraform
 ANSIBLE_DIR := $(ROOT_DIR)/infra/ansible
 INVENTORY := $(ANSIBLE_DIR)/generated/inventory.ini
 
-.PHONY: deps deps-check connect-client-help ssh-check infra config deploy test clean tf-init tf-validate ansible-lint
+.PHONY: deps deps-check local-config connect-client-help ssh-check infra config deploy test clean tf-init tf-validate ansible-lint
 
 deps:
 	$(ROOT_DIR)/install.sh
 
 deps-check:
 	$(ROOT_DIR)/install.sh --check
+
+local-config:
+	$(ROOT_DIR)/infra/scripts/local-config.sh
 
 connect-client-help:
 	$(ROOT_DIR)/infra/scripts/connect-client.sh --help

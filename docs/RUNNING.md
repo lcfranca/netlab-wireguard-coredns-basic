@@ -135,13 +135,18 @@ Note: `connect-client.sh` auto-detects Windows OpenSSH (`ssh.exe`/`scp.exe`) and
 How password authentication works:
 - Script does **not** register users.
 - Script prompts only for login authentication (`Login user`, `Login password`).
-- Credentials are validated against pre-registered users at `/opt/netlab/auth/users.yml` on the VPN server.
+- Credentials are validated **server-side** by `/opt/netlab/auth/validate_user.sh` against `/opt/netlab/auth/users.yml`.
+- The client does not read or require direct access to `users.yml`.
 - If authentication succeeds, VPN setup continues automatically.
 
 Pre-registered users source (extensible and gitignored):
 - `infra/ansible/group_vars/users.yml`
 - Add entries with `username`, `password_hash`, `client_name`, and `vpn_ip`
 - Set `vpn_ip: auto` for dynamic allocation from the WireGuard subnet
+
+Server generation step:
+- `make config` copies configured users to server-only `/opt/netlab/auth/users.yml` and installs `/opt/netlab/auth/validate_user.sh`.
+- Client authentication calls the validator through `sudo -n` on the server; the client never reads `users.yml` directly.
 
 Local smoke-test users created by default:
 - Username: `demo` / Password: `Demo!Netlab#2026`

@@ -10,6 +10,13 @@
         file: "{{ playbook_dir }}/group_vars/users.yml"
       failed_when: false
 
+    - name: Ensure at least one pre-registered user is configured
+      ansible.builtin.assert:
+        that:
+          - (pre_registered_users | default([]) | length) > 0
+        fail_msg: "No pre-registered users found. Define users in infra/ansible/group_vars/users.yml and re-run make config."
+        success_msg: "Pre-registered users are configured."
+
     - name: Install WireGuard packages
       ansible.builtin.apt:
         name:
@@ -218,7 +225,7 @@
     - name: Write pre-registered user YAML on server
       ansible.builtin.copy:
         dest: /opt/netlab/auth/users.yml
-        mode: "0644"
+        mode: "0600"
         content: |
           pre_registered_users:
           {% for user in pre_registered_users | default([]) %}
@@ -227,6 +234,89 @@
               client_name: {{ user.client_name }}
               vpn_ip: {{ (((user.vpn_ip | default('auto')) == 'auto') | ternary((wireguard_server_ip | regex_replace('\\.[0-9]+$', '')) ~ '.' ~ (loop.index0 + 20) ~ '/32', user.vpn_ip)) }}
           {% endfor %}
+
+    - name: Install server-side auth validation helper
+      ansible.builtin.copy:
+        dest: /opt/netlab/auth/validate_user.sh
+        mode: "0755"
+        content: |
+          #!/usr/bin/env bash
+          set -euo pipefail
+
+          USERNAME=""
+          PASSWORD_HASH=""
+
+          while [[ $# -gt 0 ]]; do
+            case "$1" in
+              --username)
+                USERNAME="$2"
+                shift 2
+                ;;
+              --password-hash)
+                PASSWORD_HASH="$2"
+                shift 2
+                ;;
+              *)
+                echo "INVALID_ARGS"
+                exit 2
+                ;;
+            esac
+          done
+
+          if [[ -z "${USERNAME}" || -z "${PASSWORD_HASH}" ]]; then
+            echo "INVALID_ARGS"
+            exit 2
+          fi
+
+          DB_FILE="/opt/netlab/auth/users.yml"
+          if [[ ! -f "${DB_FILE}" ]]; then
+            echo "SETUP_REQUIRED"
+            exit 3
+          fi
+
+          USER_LINE="$(awk -v u="${USERNAME}" '
+            /^[[:space:]]*-[[:space:]]+username:[[:space:]]*/ {
+              user=$3
+              gsub(/["'\''[:space:]]/, "", user)
+              hash=""
+              client=""
+            }
+            /^[[:space:]]*password_hash:[[:space:]]*/ {
+              hash=$2
+              gsub(/["'\''[:space:]]/, "", hash)
+            }
+            /^[[:space:]]*client_name:[[:space:]]*/ {
+              client=$2
+              gsub(/["'\''[:space:]]/, "", client)
+              if (user == u && hash != "" && client != "") {
+                print user ":" hash ":" client
+                exit
+              }
+            }
+          ' "${DB_FILE}")"
+
+          if [[ -z "${USER_LINE}" ]]; then
+            echo "AUTH_FAILED"
+            exit 4
+          fi
+
+          STORED_HASH="$(printf '%s' "${USER_LINE}" | awk -F: '{print $2}')"
+          CLIENT_NAME="$(printf '%s' "${USER_LINE}" | awk -F: '{print $3}')"
+
+          if [[ "${PASSWORD_HASH}" != "${STORED_HASH}" ]]; then
+            echo "AUTH_FAILED"
+            exit 4
+          fi
+
+          printf '%s\n' "${CLIENT_NAME}"
+
+    - name: Allow sudo group to run auth validator without password
+      ansible.builtin.copy:
+        dest: /etc/sudoers.d/netlab-auth-validate
+        mode: "0440"
+        validate: /usr/sbin/visudo -cf %s
+        content: |
+          %sudo ALL=(root) NOPASSWD: /opt/netlab/auth/validate_user.sh
 
     - name: Write pre-registered user auth database
       ansible.builtin.copy:
