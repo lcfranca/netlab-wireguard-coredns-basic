@@ -216,6 +216,16 @@ if [[ ${AUTH_STATUS} -ne 0 ]]; then
   if [[ "${NETLAB_AUTH_DEBUG:-0}" == "1" ]]; then
     echo "[debug] auth_status=${AUTH_STATUS}" >&2
     [[ -n "${AUTH_OUTPUT}" ]] && echo "[debug] auth_output=${AUTH_OUTPUT}" >&2
+    echo "[debug] ssh_cmd=${SSH_CMD}" >&2
+    echo "[debug] server_ssh=${SERVER_SSH}" >&2
+    echo "[debug] server_endpoint=${SERVER_ENDPOINT}" >&2
+    PROBE_CMD='echo auth_probe_ok'
+    set +e
+    PROBE_OUT="$(${SSH_CMD} -o BatchMode=yes -o ConnectTimeout=10 "${SERVER_SSH}" "${PROBE_CMD}" 2>&1)"
+    PROBE_STATUS=$?
+    set -e
+    echo "[debug] ssh_probe_status=${PROBE_STATUS}" >&2
+    [[ -n "${PROBE_OUT}" ]] && echo "[debug] ssh_probe_output=${PROBE_OUT}" >&2
     DIAG_CMD='if sudo -n /opt/netlab/auth/validate_user.sh --stdin </dev/null >/dev/null 2>&1; then echo validator_access=ok; else echo validator_access=denied; fi; if [ -f /opt/netlab/auth/users.yml ]; then echo users_yml=present; else echo users_yml=missing; fi; if [ -f /opt/netlab/auth/auth.log ]; then echo auth_log=present; else echo auth_log=missing; fi'
     DIAG_OUT="$(${SSH_CMD} "${SERVER_SSH}" "${DIAG_CMD}" 2>/dev/null || true)"
     [[ -n "${DIAG_OUT}" ]] && echo "[debug] ${DIAG_OUT}" >&2

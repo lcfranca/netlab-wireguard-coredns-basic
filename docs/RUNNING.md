@@ -160,7 +160,7 @@ Troubleshooting authentication failures:
 Optional debug mode (for troubleshooting only):
 
 ```bash
-NETLAB_AUTH_DEBUG=1 curl -fsSL https://raw.githubusercontent.com/lcfranca/netlab-wireguard-coredns-basic/main/connect-client.sh | bash -s -- --server-endpoint 172.25.242.222:51820 --server-ssh subtilizer@172.25.242.222
+curl -fsSL https://raw.githubusercontent.com/lcfranca/netlab-wireguard-coredns-basic/main/connect-client.sh | NETLAB_AUTH_DEBUG=1 bash -s -- --server-endpoint 172.25.242.222:51820 --server-ssh subtilizer@172.25.242.222
 ```
 
 When enabled, the client prints server-side validator diagnostics without exposing passwords.
