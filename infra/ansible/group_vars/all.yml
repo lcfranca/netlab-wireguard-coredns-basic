@@ -11,6 +11,8 @@ service_host_ip: "{{ wireguard_server_ip }}"
 service_container_image: netlab/service1:latest
 coredns_image: coredns/coredns:1.12.0
 
+pre_registered_users: []
+
 repo_root: "{{ playbook_dir }}/../.."
 coredns_config_src: "{{ repo_root }}/coredns/Corefile"
 coredns_zone_src: "{{ repo_root }}/coredns/zone.db"

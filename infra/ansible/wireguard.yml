@@ -5,6 +5,11 @@
   vars:
     client_hosts: "{{ groups['wireguard_clients'] | default([]) }}"
   tasks:
+    - name: Load local pre-registered users file when present
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/group_vars/users.yml"
+      failed_when: false
+
     - name: Install WireGuard packages
       ansible.builtin.apt:
         name:
@@ -34,13 +39,19 @@
 
     - name: Ensure WireGuard directories exist
       ansible.builtin.file:
-        path: "{{ item }}"
+        path: "{{ item.path }}"
         state: directory
-        mode: "0700"
+        mode: "{{ item.mode }}"
       loop:
-        - /etc/wireguard
-        - /etc/wireguard/clients
-        - /opt/netlab/wg-clients
+        - { path: /etc/wireguard, mode: "0700" }
+        - { path: /etc/wireguard/clients, mode: "0700" }
+        - { path: /opt/netlab/wg-clients, mode: "0755" }
+
+    - name: Ensure client auth directory exists
+      ansible.builtin.file:
+        path: /opt/netlab/auth
+        state: directory
+        mode: "0755"
 
     - name: Check whether server private key exists
       ansible.builtin.stat:
@@ -98,6 +109,13 @@
       loop_control:
         index_var: loop_index
 
+    - name: Append pre-registered users to client definitions
+      ansible.builtin.set_fact:
+        wireguard_clients_data: "{{ wireguard_clients_data | default([]) + [ {'name': item.client_name, 'ip': (((item.vpn_ip | default('auto')) == 'auto') | ternary((wireguard_server_ip | regex_replace('\\.[0-9]+$', '')) ~ '.' ~ (loop_index + 20) ~ '/32', item.vpn_ip))} ] }}"
+      loop: "{{ pre_registered_users | default([]) }}"
+      loop_control:
+        index_var: loop_index
+
     - name: Generate private keys for clients
       ansible.builtin.command: wg genkey
       args:
@@ -111,8 +129,28 @@
         dest: "/etc/wireguard/clients/{{ item.item.name }}.key"
         content: "{{ item.stdout }}\n"
         mode: "0600"
-      when: item.rc is defined and item.rc == 0 and item.stdout is defined and (item.stdout | trim | length > 0)
+      when: item.changed | default(false)
       loop: "{{ generated_client_keys.results | default([]) }}"
+
+    - name: Normalize or regenerate invalid client private keys
+      ansible.builtin.shell: |
+        set -euo pipefail
+        key_file="/etc/wireguard/clients/{{ item.name }}.key"
+        key_value="$(tr -d '\r\n[:space:]' < "${key_file}" 2>/dev/null || true)"
+        if [[ -z "${key_value}" ]] || ! printf '%s' "${key_value}" | wg pubkey >/dev/null 2>&1; then
+          wg genkey > "${key_file}"
+          chmod 600 "${key_file}"
+          echo regenerated
+          exit 0
+        fi
+        printf '%s\n' "${key_value}" > "${key_file}"
+        chmod 600 "${key_file}"
+        echo normalized
+      args:
+        executable: /bin/bash
+      register: normalized_client_keys
+      changed_when: "'regenerated' in normalized_client_keys.stdout"
+      loop: "{{ wireguard_clients_data | default([]) }}"
 
     - name: Derive client public keys
       ansible.builtin.shell: set -euo pipefail; cat /etc/wireguard/clients/{{ item.name }}.key | wg pubkey
@@ -171,11 +209,34 @@
         AllowedIPs = {{ wireguard_allowed_ips }}
         PersistentKeepalive = 25
         EOF
-        chmod 600 "/opt/netlab/wg-clients/${CLIENT_NAME}.conf"
+        chmod 644 "/opt/netlab/wg-clients/${CLIENT_NAME}.conf"
       args:
         executable: /bin/bash
       loop: "{{ wireguard_clients_data | default([]) }}"
       changed_when: true
+
+    - name: Write pre-registered user YAML on server
+      ansible.builtin.copy:
+        dest: /opt/netlab/auth/users.yml
+        mode: "0644"
+        content: |
+          pre_registered_users:
+          {% for user in pre_registered_users | default([]) %}
+            - username: {{ user.username }}
+              password_hash: {{ user.password_hash }}
+              client_name: {{ user.client_name }}
+              vpn_ip: {{ (((user.vpn_ip | default('auto')) == 'auto') | ternary((wireguard_server_ip | regex_replace('\\.[0-9]+$', '')) ~ '.' ~ (loop.index0 + 20) ~ '/32', user.vpn_ip)) }}
+          {% endfor %}
+
+    - name: Write pre-registered user auth database
+      ansible.builtin.copy:
+        dest: /opt/netlab/auth/users.csv
+        mode: "0644"
+        content: |
+          # username:password_hash:client_name
+          {% for user in pre_registered_users | default([]) %}
+          {{ user.username }}:{{ user.password_hash }}:{{ user.client_name }}
+          {% endfor %}
 
 - name: Optionally install and apply WireGuard profiles on client hosts
   hosts: wireguard_clients

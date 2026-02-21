@@ -6,6 +6,8 @@ Production-ready reference implementation for a private intranet stack using Wir
 
 - Project overview and workflow: [docs/README.md](docs/README.md)
 - End-to-end runbook: [docs/RUNNING.md](docs/RUNNING.md)
+- Client connection (Linux + Windows): [docs/RUNNING.md#client-connection-linux-and-windows](docs/RUNNING.md#client-connection-linux-and-windows)
+- Local auto-configuration: [docs/RUNNING.md#2-configure-terraform-variables](docs/RUNNING.md#2-configure-terraform-variables)
 - Architecture details: [docs/architecture.md](docs/architecture.md)
 
 ## One-command client onboarding

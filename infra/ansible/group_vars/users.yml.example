@@ -1,0 +1,12 @@
+# Copy to users.yml (gitignored) and customize with authorized users only.
+# password_hash: SHA-256 of the plaintext password.
+# vpn_ip: use 'auto' for dynamic allocation from WireGuard subnet.
+pre_registered_users:
+  - username: user1
+    password_hash: <sha256-hash>
+    client_name: client-user1
+    vpn_ip: auto
+  - username: user2
+    password_hash: <sha256-hash>
+    client_name: client-user2
+    vpn_ip: auto

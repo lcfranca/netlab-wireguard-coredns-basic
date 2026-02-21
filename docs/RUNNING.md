@@ -62,6 +62,27 @@ Edit it with your real server/client values:
 - `ssh_port`
 - `ssh_private_key_file`
 
+### Automatic local configuration (recommended)
+
+Run:
+
+```bash
+make local-config
+```
+
+What `local-config.sh` does:
+- Loads `SUDO_PASSWORD` from `.env` (prompts once and stores it if missing).
+- Detects local server endpoint/IP dynamically.
+- Detects SSH user, SSH port, and SSH private key path dynamically.
+- Creates an SSH key if missing.
+- Installs/starts local SSH server on port `22` if not available.
+- Writes `infra/terraform/terraform.tfvars` with a ready-to-provision configuration.
+
+Required input:
+- Only `.env` sudo password.
+
+No other manual configuration is required for a default local setup.
+
 ## 3) Provision host and configure services
 
 From repository root:
@@ -97,24 +118,38 @@ If the client host is listed in `client_hosts`, `make config` provisions it auto
 
 ### Option B: Automated client script (recommended)
 
-Run one command on the second computer, no clone required:
+Client connection (Unix/Linux/macOS):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/lcfranca/netlab-wireguard-coredns-basic/main/connect-client.sh | bash -s -- --server-endpoint 172.25.242.222:51820 --server-ssh subtilizer@172.25.242.222
 ```
 
+Client connection (Windows PowerShell + Git Bash):
+
+```powershell
+PS> Invoke-WebRequest -Uri "https://raw.githubusercontent.com/lcfranca/netlab-wireguard-coredns-basic/main/connect-client.sh" -OutFile "connect-client.sh"
+PS> bash connect-client.sh --server-endpoint 172.25.242.222:51820 --server-ssh subtilizer@172.25.242.222
+```
+
 How password authentication works:
-- First run: script prompts to create a profile password and confirms it.
-- Script hashes and stores that password in `~/.config/netlab-wireguard/client.env` (mode `600`).
-- Next runs: script prompts for the profile password and validates it against the stored hash.
-- If validation succeeds, VPN setup continues automatically.
+- Script does **not** register users.
+- Script prompts only for login authentication (`Login user`, `Login password`).
+- Credentials are validated against pre-registered users at `/opt/netlab/auth/users.yml` on the VPN server.
+- If authentication succeeds, VPN setup continues automatically.
+
+Pre-registered users source (extensible and gitignored):
+- `infra/ansible/group_vars/users.yml`
+- Add entries with `username`, `password_hash`, `client_name`, and `vpn_ip`
+- Set `vpn_ip: auto` for dynamic allocation from the WireGuard subnet
+
+Local smoke-test users created by default:
+- Username: `demo` / Password: `Demo!Netlab#2026`
+- Username: `ops` / Password: `Ops!Netlab#2026`
 
 What the script configures automatically:
-- Prompts for local and server sudo passwords (stored in the same profile file unless `--no-store` is used).
-- Generates client keypair.
-- Registers client peer on server and restarts server WireGuard.
-- Installs/starts local `wg0` interface.
-- Verifies route, DNS, and HTTP for `service1.intranet.local`.
+- Downloads the pre-generated user profile from `/opt/netlab/wg-clients/<client>.conf`.
+- If `wg` is available, applies and starts local `wg0`.
+- Validates DNS and HTTP reachability for `service1.intranet.local`.
 
 Get server public key:
 
@@ -182,11 +217,24 @@ This section is only for the second computer (client) that will join the VPN and
 - `curl`
 - Optional: `dig` (or use `getent`)
 
-### One-command setup (no clone)
+### Client connection (Linux and Windows)
+
+Unix/Linux/macOS:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/lcfranca/netlab-wireguard-coredns-basic/main/connect-client.sh | bash -s -- --server-endpoint 172.25.242.222:51820 --server-ssh subtilizer@172.25.242.222
 ```
+
+Windows (PowerShell + Git Bash):
+
+```powershell
+PS> Invoke-WebRequest -Uri "https://raw.githubusercontent.com/lcfranca/netlab-wireguard-coredns-basic/main/connect-client.sh" -OutFile "connect-client.sh"
+PS> bash connect-client.sh --server-endpoint 172.25.242.222:51820 --server-ssh subtilizer@172.25.242.222
+```
+
+If script shows `Missing required command: wg`:
+- Install WireGuard for Windows: https://www.wireguard.com/install/
+- Re-run `bash connect-client.sh ...` or import generated config from `%USERPROFILE%\\.config\\netlab-wireguard\\wg0.conf` into the WireGuard UI and activate tunnel.
 
 ### Option A: Use generated client profile from server
 
@@ -207,21 +255,16 @@ sudo wg show wg0
 ### Password validation and profile
 
 - Profile file: `~/.config/netlab-wireguard/client.env`
-- Stored items: hashed profile password + connection defaults + sudo credentials
-- On every run, the script validates entered profile password against stored hash
+- Stored items: connection defaults and last login user
+- User/password are validated against server-side pre-registered user database
 - If password is wrong, setup aborts
 
-### Optional custom parameters
+### Supported script parameters
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/lcfranca/netlab-wireguard-coredns-basic/main/connect-client.sh | bash -s -- \
-	--client-name client-2 \
-	--server-endpoint 172.25.242.222:51820 \
-	--server-ssh subtilizer@172.25.242.222 \
-	--client-address 10.0.0.20/24 \
-	--dns 10.0.0.1 \
-	--allowed-ips 10.0.0.0/24
-```
+`connect-client.sh` supports:
+- `--server-endpoint <ip:port>`
+- `--server-ssh <user@host>`
+- `--interface <wg-if>`
 
 ### Access intranet containers via internal hostname
 

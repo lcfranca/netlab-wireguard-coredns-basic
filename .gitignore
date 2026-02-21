@@ -7,3 +7,5 @@ infra/ansible/generated/
 .env
 .docs/
 infra/terraform/terraform.tfvars
+infra/ansible/group_vars/users.yml
+auth/users.*
