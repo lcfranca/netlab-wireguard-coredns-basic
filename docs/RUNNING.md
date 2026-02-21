@@ -155,7 +155,15 @@ Troubleshooting authentication failures:
 - Ensure you enter login/password exactly; Windows CRLF input is normalized by the client script.
 - If server was provisioned with an older auth helper, re-running `make config` updates it; client also includes compatibility fallback during rollout.
 - Check server auth events in `/opt/netlab/auth/auth.log` (contains username + status only).
-- If credentials are invalid, client output is only: `Authentication failed: invalid user or password.`
+- If credentials are invalid, client output is only: `Authentication failed: invalid user or password`.
+
+Optional debug mode (for troubleshooting only):
+
+```bash
+NETLAB_AUTH_DEBUG=1 curl -fsSL https://raw.githubusercontent.com/lcfranca/netlab-wireguard-coredns-basic/main/connect-client.sh | bash -s -- --server-endpoint 172.25.242.222:51820 --server-ssh subtilizer@172.25.242.222
+```
+
+When enabled, the client prints server-side validator diagnostics without exposing passwords.
 
 Local smoke-test users created by default:
 - Username: `demo` / Password: `Demo!Netlab#2026`
