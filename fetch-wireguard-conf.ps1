@@ -175,13 +175,13 @@ function Ensure-HostsEntry {
 function Test-TcpReachability {
   param(
     [Parameter(Mandatory = $true)]
-    [string]$Host,
+    [string]$TargetHost,
     [Parameter(Mandatory = $true)]
     [int]$Port
   )
 
   try {
-    $result = Test-NetConnection -ComputerName $Host -Port $Port -WarningAction SilentlyContinue -InformationLevel Quiet
+    $result = Test-NetConnection -ComputerName $TargetHost -Port $Port -WarningAction SilentlyContinue -InformationLevel Quiet
     return [bool]$result
   }
   catch {
@@ -285,7 +285,7 @@ Start-Sleep -Seconds 2
 
 $intranetHost = "service1.intranet.local"
 $dnsServer = "10.0.0.1"
-$serviceReachable = Test-TcpReachability -Host $dnsServer -Port 80
+$serviceReachable = Test-TcpReachability -TargetHost $dnsServer -Port 80
 
 if (-not $serviceReachable) {
   Write-Host "Tunnel appears active but service is unreachable at $dnsServer:80. Forcing tunnel reinstall..." -ForegroundColor Yellow
