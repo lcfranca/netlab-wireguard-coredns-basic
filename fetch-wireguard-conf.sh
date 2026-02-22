@@ -6,6 +6,7 @@ CLIENT_NAME=""
 INTERFACE="wg0"
 REMOTE_DIR="/opt/netlab/wg-clients"
 OUTPUT_DIR="${HOME}/.config/netlab-wireguard"
+INTERACTIVE_SSH=0
 
 usage() {
   cat <<'EOF'
@@ -18,6 +19,7 @@ Options:
   --interface <wg-if>           Local output filename base (default: wg0)
   --remote-dir <path>           Remote directory (default: /opt/netlab/wg-clients)
   --output-dir <path>           Local output directory (default: ~/.config/netlab-wireguard)
+  --interactive-ssh             Allow interactive SSH password prompt
   -h, --help                    Show help
 
 Example:
@@ -48,6 +50,10 @@ while [[ $# -gt 0 ]]; do
       OUTPUT_DIR="${2:-}"
       shift 2
       ;;
+    --interactive-ssh)
+      INTERACTIVE_SSH=1
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -75,8 +81,12 @@ OUTPUT_FILE="${OUTPUT_DIR}/${INTERFACE}.conf"
 REMOTE_FILE="${SERVER_SSH}:${REMOTE_DIR%/}/${CLIENT_NAME}.conf"
 
 echo "Downloading profile '${CLIENT_NAME}' from ${SERVER_SSH} ..."
-scp -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
-  "${REMOTE_FILE}" "${OUTPUT_FILE}"
+SCP_OPTS=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=10)
+if [[ ${INTERACTIVE_SSH} -eq 0 ]]; then
+  SCP_OPTS+=(-o BatchMode=yes)
+fi
+
+scp "${SCP_OPTS[@]}" "${REMOTE_FILE}" "${OUTPUT_FILE}"
 chmod 600 "${OUTPUT_FILE}"
 
 echo "Saved: ${OUTPUT_FILE}"

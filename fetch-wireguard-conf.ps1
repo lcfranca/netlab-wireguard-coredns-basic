@@ -10,6 +10,9 @@ param(
 
   [Parameter(Mandatory = $false)]
   [string]$RemoteDir = "/opt/netlab/wg-clients"
+,
+  [Parameter(Mandatory = $false)]
+  [switch]$InteractiveSsh
 )
 
 $ErrorActionPreference = "Stop"
@@ -55,16 +58,22 @@ $remoteFile = "{0}:{1}/{2}.conf" -f $ServerSsh, $RemoteDir.TrimEnd('/'), $Client
 Write-Host "Downloading profile '$ClientName' from $ServerSsh ..." -ForegroundColor Cyan
 
 $scpArgs = @(
-  "-o", "BatchMode=yes",
   "-o", "StrictHostKeyChecking=accept-new",
-  "-o", "ConnectTimeout=10",
-  $remoteFile,
-  $outputFile
+  "-o", "ConnectTimeout=10"
 )
+
+if (-not $InteractiveSsh) {
+  $scpArgs += @("-o", "BatchMode=yes")
+}
+
+$scpArgs += @($remoteFile, $outputFile)
 
 & $scpCmd @scpArgs
 if ($LASTEXITCODE -ne 0) {
-  throw "Failed to download profile. Check SSH key access for '$ServerSsh' and profile name '$ClientName'."
+  if (-not $InteractiveSsh) {
+    throw "Failed to download profile. Check SSH key access for '$ServerSsh', profile name '$ClientName', or retry with -InteractiveSsh."
+  }
+  throw "Failed to download profile. Check SSH credentials for '$ServerSsh' and profile name '$ClientName'."
 }
 
 Write-Host "Saved: $outputFile" -ForegroundColor Green
