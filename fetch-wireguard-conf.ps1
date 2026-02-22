@@ -102,6 +102,24 @@ function Install-TunnelService {
   return $proc.ExitCode
 }
 
+function Invoke-WireGuardExe {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$WireGuardExe,
+    [Parameter(Mandatory = $true)]
+    [string[]]$ArgumentList
+  )
+
+  $admin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+  if ($admin) {
+    & $WireGuardExe @ArgumentList
+    return $LASTEXITCODE
+  }
+
+  $proc = Start-Process -FilePath $WireGuardExe -ArgumentList $ArgumentList -Verb RunAs -PassThru -Wait
+  return $proc.ExitCode
+}
+
 function Ensure-TunnelServiceRunning {
   param(
     [Parameter(Mandatory = $true)]
@@ -144,7 +162,47 @@ function Ensure-HostsEntry {
     return
   }
 
-  Add-Content -Path $hostsPath -Value "`n$IpAddress`t$HostName"
+  try {
+    Add-Content -Path $hostsPath -Value "`n$IpAddress`t$HostName"
+    return $true
+  }
+  catch {
+    Write-Host "Could not update hosts file (admin required)." -ForegroundColor Yellow
+    return $false
+  }
+}
+
+function Test-TcpReachability {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$Host,
+    [Parameter(Mandatory = $true)]
+    [int]$Port
+  )
+
+  try {
+    $result = Test-NetConnection -ComputerName $Host -Port $Port -WarningAction SilentlyContinue -InformationLevel Quiet
+    return [bool]$result
+  }
+  catch {
+    return $false
+  }
+}
+
+function Reinstall-TunnelService {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$WireGuardExe,
+    [Parameter(Mandatory = $true)]
+    [string]$Interface,
+    [Parameter(Mandatory = $true)]
+    [string]$ConfPath
+  )
+
+  Write-Host "Reinstalling tunnel service '$Interface' ..." -ForegroundColor Yellow
+  [void](Invoke-WireGuardExe -WireGuardExe $WireGuardExe -ArgumentList @('/uninstalltunnelservice', $Interface))
+  Start-Sleep -Seconds 1
+  return (Install-TunnelService -WireGuardExe $WireGuardExe -ConfPath $ConfPath)
 }
 
 function Test-IntranetDns {
@@ -227,11 +285,22 @@ Start-Sleep -Seconds 2
 
 $intranetHost = "service1.intranet.local"
 $dnsServer = "10.0.0.1"
+$serviceReachable = Test-TcpReachability -Host $dnsServer -Port 80
+
+if (-not $serviceReachable) {
+  Write-Host "Tunnel appears active but service is unreachable at $dnsServer:80. Forcing tunnel reinstall..." -ForegroundColor Yellow
+  $reinstallExitCode = Reinstall-TunnelService -WireGuardExe $wireGuardExe -Interface $Interface -ConfPath $outputFile
+  if ($reinstallExitCode -ne 0 -and -not (Ensure-TunnelServiceRunning -Interface $Interface)) {
+    throw "WireGuard tunnel reinstall failed (exit code $reinstallExitCode)."
+  }
+  Start-Sleep -Seconds 2
+}
+
 $dnsOk = Test-IntranetDns -HostName $intranetHost -DnsServer $dnsServer
 
 if (-not $dnsOk -and -not $SkipHostsFallback) {
   Write-Host "DNS resolution not ready. Applying hosts fallback for $intranetHost ..." -ForegroundColor Yellow
-  Ensure-HostsEntry -HostName $intranetHost -IpAddress $dnsServer
+  [void](Ensure-HostsEntry -HostName $intranetHost -IpAddress $dnsServer)
   ipconfig /flushdns | Out-Null
 }
 

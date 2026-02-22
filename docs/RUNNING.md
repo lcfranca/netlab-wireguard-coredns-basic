@@ -196,6 +196,8 @@ Notes:
 - Use `-SkipTunnelActivation` if you only want to download the `.conf`.
 - If Windows DNS does not resolve `service1.intranet.local` immediately, the script applies hosts fallback (`10.0.0.1 service1.intranet.local`) and flushes DNS cache.
 - Use `-SkipHostsFallback` to disable this behavior.
+- If the existing tunnel service is stale, the script automatically reinstalls the `wg0` tunnel service.
+- Run PowerShell as Administrator for best results (required for hosts-file fallback).
 - Linux/macOS output file is `~/.config/netlab-wireguard/wg0.conf`.
 - `-ServerSsh`/`--server-ssh` is the SSH account on server (for example, `subtilizer@...`), not the app login user (`demo`/`ops`).
 - PowerShell script auto-retries with interactive SSH password prompt if key-based auth fails.
