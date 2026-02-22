@@ -265,6 +265,8 @@ done
 SSH_CMD="$(resolve_cmd ssh || true)"
 SCP_CMD="$(resolve_cmd scp || true)"
 CURL_CMD="$(resolve_cmd curl || true)"
+SSH_BASE_OPTS=("-o" "BatchMode=yes" "-o" "StrictHostKeyChecking=accept-new" "-o" "ConnectTimeout=10")
+SCP_BASE_OPTS=("-o" "BatchMode=yes" "-o" "StrictHostKeyChecking=accept-new" "-o" "ConnectTimeout=10")
 
 if [[ -z "${SSH_CMD}" || -z "${SCP_CMD}" || -z "${CURL_CMD}" ]]; then
   if ! is_windows_shell; then
@@ -309,7 +311,7 @@ fi
 
 AUTH_CMD="sudo -n /opt/netlab/auth/validate_user.sh --stdin"
 set +e
-AUTH_OUTPUT="$(printf '%s\n%s\n' "${LOGIN_USER}" "${LOGIN_PASSWORD}" | ${SSH_CMD} "${SERVER_SSH}" "${AUTH_CMD}" 2>/dev/null)"
+AUTH_OUTPUT="$(printf '%s\n%s\n' "${LOGIN_USER}" "${LOGIN_PASSWORD}" | "${SSH_CMD}" "${SSH_BASE_OPTS[@]}" "${SERVER_SSH}" "${AUTH_CMD}" 2>/dev/null)"
 AUTH_STATUS=$?
 set -e
 
@@ -317,7 +319,7 @@ if [[ ${AUTH_STATUS} -ne 0 ]]; then
   ENTERED_HASH="$(hash_password "${LOGIN_PASSWORD}")"
   AUTH_CMD_COMPAT="sudo -n /opt/netlab/auth/validate_user.sh --username $(printf '%q' "${LOGIN_USER}") --password-hash $(printf '%q' "${ENTERED_HASH}")"
   set +e
-  AUTH_OUTPUT="$(${SSH_CMD} "${SERVER_SSH}" "${AUTH_CMD_COMPAT}" 2>/dev/null)"
+  AUTH_OUTPUT="$("${SSH_CMD}" "${SSH_BASE_OPTS[@]}" "${SERVER_SSH}" "${AUTH_CMD_COMPAT}" 2>/dev/null)"
   AUTH_STATUS=$?
   set -e
 fi
@@ -331,13 +333,13 @@ if [[ ${AUTH_STATUS} -ne 0 ]]; then
     echo "[debug] server_endpoint=${SERVER_ENDPOINT}" >&2
     PROBE_CMD='echo auth_probe_ok'
     set +e
-    PROBE_OUT="$(${SSH_CMD} -o BatchMode=yes -o ConnectTimeout=10 "${SERVER_SSH}" "${PROBE_CMD}" 2>&1)"
+    PROBE_OUT="$("${SSH_CMD}" "${SSH_BASE_OPTS[@]}" "${SERVER_SSH}" "${PROBE_CMD}" 2>&1)"
     PROBE_STATUS=$?
     set -e
     echo "[debug] ssh_probe_status=${PROBE_STATUS}" >&2
     [[ -n "${PROBE_OUT}" ]] && echo "[debug] ssh_probe_output=${PROBE_OUT}" >&2
     DIAG_CMD='if sudo -n /opt/netlab/auth/validate_user.sh --stdin </dev/null >/dev/null 2>&1; then echo validator_access=ok; else echo validator_access=denied; fi; if [ -f /opt/netlab/auth/users.yml ]; then echo users_yml=present; else echo users_yml=missing; fi; if [ -f /opt/netlab/auth/auth.log ]; then echo auth_log=present; else echo auth_log=missing; fi'
-    DIAG_OUT="$(${SSH_CMD} "${SERVER_SSH}" "${DIAG_CMD}" 2>/dev/null || true)"
+    DIAG_OUT="$("${SSH_CMD}" "${SSH_BASE_OPTS[@]}" "${SERVER_SSH}" "${DIAG_CMD}" 2>/dev/null || true)"
     [[ -n "${DIAG_OUT}" ]] && echo "[debug] ${DIAG_OUT}" >&2
   fi
   echo "${AUTH_FAIL_MSG}" >&2
@@ -355,7 +357,7 @@ mkdir -p "${WORK_DIR}"
 chmod 700 "${WORK_DIR}"
 CLIENT_CONF_PATH="${WORK_DIR}/${WG_IFACE}.conf"
 
-${SCP_CMD} "${SERVER_SSH}:/opt/netlab/wg-clients/${CLIENT_PROFILE_NAME}.conf" "${CLIENT_CONF_PATH}" >/dev/null
+"${SCP_CMD}" "${SCP_BASE_OPTS[@]}" "${SERVER_SSH}:/opt/netlab/wg-clients/${CLIENT_PROFILE_NAME}.conf" "${CLIENT_CONF_PATH}" >/dev/null
 chmod 600 "${CLIENT_CONF_PATH}"
 
 save_profile

@@ -10,6 +10,7 @@ Production-ready reference implementation for a private intranet stack using Wir
 - Client connection (Linux + Windows): [docs/RUNNING.md#client-connection-linux-and-windows](docs/RUNNING.md#client-connection-linux-and-windows)
 - Client authentication behavior: [docs/RUNNING.md#4-connect-another-computer-to-vpn-single-command](docs/RUNNING.md#4-connect-another-computer-to-vpn-single-command)
 - Auth troubleshooting: [docs/RUNNING.md#4-connect-another-computer-to-vpn-single-command](docs/RUNNING.md#4-connect-another-computer-to-vpn-single-command)
+- Dependency auto-detection/install: [docs/RUNNING.md#4-connect-another-computer-to-vpn-single-command](docs/RUNNING.md#4-connect-another-computer-to-vpn-single-command)
 - Local auto-configuration: [docs/RUNNING.md#2-configure-terraform-variables](docs/RUNNING.md#2-configure-terraform-variables)
 - Architecture details: [docs/architecture.md](docs/architecture.md)
 

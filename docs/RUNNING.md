@@ -168,6 +168,12 @@ Troubleshooting authentication failures:
 - If server was provisioned with an older auth helper, re-running `make config` updates it; client also includes compatibility fallback during rollout.
 - Check server auth events in `/opt/netlab/auth/auth.log` (contains username + status only).
 - If credentials are invalid, client output is only: `Authentication failed: invalid user or password`.
+- Client SSH/SCP uses non-interactive key-based auth (`BatchMode=yes`). If your key is not authorized on server, fix SSH keys for `--server-ssh` user.
+- On first connect, host key is accepted automatically (`StrictHostKeyChecking=accept-new`).
+
+Windows browser DNS note:
+- `service1.intranet.local` resolves only when WireGuard tunnel is active and using DNS `10.0.0.1`.
+- If you see `DNS_PROBE_FINISHED_NXDOMAIN`, import generated profile into WireGuard Windows UI and activate the tunnel first.
 
 Optional debug mode (for troubleshooting only):
 
