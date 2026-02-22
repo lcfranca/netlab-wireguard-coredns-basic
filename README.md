@@ -33,3 +33,5 @@ curl -fsSL https://raw.githubusercontent.com/lcfranca/netlab-wireguard-coredns-b
 ```
 
 If SSH key is not authorized on server, add `-InteractiveSsh` (PowerShell) or `--interactive-ssh` (Linux/macOS).
+
+On Windows, if DNS is not immediately updated after tunnel activation, the script adds hosts fallback for `service1.intranet.local` -> `10.0.0.1` and flushes DNS.

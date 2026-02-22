@@ -16,6 +16,9 @@ param(
 ,
   [Parameter(Mandatory = $false)]
   [switch]$SkipTunnelActivation
+,
+  [Parameter(Mandatory = $false)]
+  [switch]$SkipHostsFallback
 )
 
 $ErrorActionPreference = "Stop"
@@ -99,6 +102,44 @@ function Install-TunnelService {
   return $proc.ExitCode
 }
 
+function Ensure-HostsEntry {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$HostName,
+    [Parameter(Mandatory = $true)]
+    [string]$IpAddress
+  )
+
+  $hostsPath = Join-Path $env:WINDIR "System32\drivers\etc\hosts"
+  if (-not (Test-Path $hostsPath)) {
+    return
+  }
+
+  $content = Get-Content -Path $hostsPath -ErrorAction SilentlyContinue
+  if ($content -match "(^|\s)$([regex]::Escape($HostName))(\s|$)") {
+    return
+  }
+
+  Add-Content -Path $hostsPath -Value "`n$IpAddress`t$HostName"
+}
+
+function Test-IntranetDns {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$HostName,
+    [Parameter(Mandatory = $true)]
+    [string]$DnsServer
+  )
+
+  try {
+    Resolve-DnsName -Name $HostName -Server $DnsServer -DnsOnly -ErrorAction Stop | Out-Null
+    return $true
+  }
+  catch {
+    return $false
+  }
+}
+
 Write-Host "Downloading profile '$ClientName' from $ServerSsh ..." -ForegroundColor Cyan
 
 $scpArgs = @(
@@ -152,6 +193,30 @@ Write-Host "Activating WireGuard tunnel from $outputFile ..." -ForegroundColor C
 $installExitCode = Install-TunnelService -WireGuardExe $wireGuardExe -ConfPath $outputFile
 if ($installExitCode -ne 0) {
   throw "WireGuard tunnel activation failed (exit code $installExitCode)."
+}
+
+Start-Sleep -Seconds 2
+
+$intranetHost = "service1.intranet.local"
+$dnsServer = "10.0.0.1"
+$dnsOk = Test-IntranetDns -HostName $intranetHost -DnsServer $dnsServer
+
+if (-not $dnsOk -and -not $SkipHostsFallback) {
+  Write-Host "DNS resolution not ready. Applying hosts fallback for $intranetHost ..." -ForegroundColor Yellow
+  Ensure-HostsEntry -HostName $intranetHost -IpAddress $dnsServer
+  ipconfig /flushdns | Out-Null
+}
+
+try {
+  Invoke-WebRequest -UseBasicParsing -Uri "http://$intranetHost" -TimeoutSec 10 | Out-Null
+}
+catch {
+  try {
+    Invoke-WebRequest -UseBasicParsing -Uri "http://$dnsServer" -Headers @{ Host = $intranetHost } -TimeoutSec 10 | Out-Null
+  }
+  catch {
+    Write-Host "Tunnel is active, but HTTP test failed. Check server-side service and firewall." -ForegroundColor Yellow
+  }
 }
 
 Write-Host "WireGuard tunnel activated." -ForegroundColor Green

@@ -194,6 +194,8 @@ Notes:
 - `-ClientName` must match the server profile name at `/opt/netlab/wg-clients/<client-name>.conf`.
 - The script stores the profile in `%USERPROFILE%\\.config\\netlab-wireguard\\wg0.conf` and activates the tunnel automatically.
 - Use `-SkipTunnelActivation` if you only want to download the `.conf`.
+- If Windows DNS does not resolve `service1.intranet.local` immediately, the script applies hosts fallback (`10.0.0.1 service1.intranet.local`) and flushes DNS cache.
+- Use `-SkipHostsFallback` to disable this behavior.
 - Linux/macOS output file is `~/.config/netlab-wireguard/wg0.conf`.
 - `-ServerSsh`/`--server-ssh` is the SSH account on server (for example, `subtilizer@...`), not the app login user (`demo`/`ops`).
 - PowerShell script auto-retries with interactive SSH password prompt if key-based auth fails.
