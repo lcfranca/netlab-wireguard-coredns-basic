@@ -102,6 +102,30 @@ function Install-TunnelService {
   return $proc.ExitCode
 }
 
+function Ensure-TunnelServiceRunning {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$Interface
+  )
+
+  $serviceName = "WireGuardTunnel`$$Interface"
+  $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+  if (-not $service) {
+    return $false
+  }
+
+  if ($service.Status -ne 'Running') {
+    try {
+      Start-Service -Name $serviceName -ErrorAction Stop
+    }
+    catch {
+      return $false
+    }
+  }
+
+  return $true
+}
+
 function Ensure-HostsEntry {
   param(
     [Parameter(Mandatory = $true)]
@@ -192,7 +216,11 @@ if (-not $wireGuardExe) {
 Write-Host "Activating WireGuard tunnel from $outputFile ..." -ForegroundColor Cyan
 $installExitCode = Install-TunnelService -WireGuardExe $wireGuardExe -ConfPath $outputFile
 if ($installExitCode -ne 0) {
-  throw "WireGuard tunnel activation failed (exit code $installExitCode)."
+  Write-Host "WireGuard returned exit code $installExitCode. Checking existing tunnel service..." -ForegroundColor Yellow
+  if (-not (Ensure-TunnelServiceRunning -Interface $Interface)) {
+    throw "WireGuard tunnel activation failed (exit code $installExitCode). Tunnel '$Interface' could not be started."
+  }
+  Write-Host "Existing tunnel '$Interface' is active." -ForegroundColor Green
 }
 
 Start-Sleep -Seconds 2
