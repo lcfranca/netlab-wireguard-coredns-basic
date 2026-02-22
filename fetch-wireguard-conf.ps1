@@ -71,6 +71,21 @@ $scpArgs += @($remoteFile, $outputFile)
 & $scpCmd @scpArgs
 if ($LASTEXITCODE -ne 0) {
   if (-not $InteractiveSsh) {
+    Write-Host "Retrying with interactive SSH authentication..." -ForegroundColor Yellow
+    $interactiveArgs = @(
+      "-o", "StrictHostKeyChecking=accept-new",
+      "-o", "ConnectTimeout=10",
+      $remoteFile,
+      $outputFile
+    )
+    & $scpCmd @interactiveArgs
+    if ($LASTEXITCODE -eq 0) {
+      Write-Host "Saved: $outputFile" -ForegroundColor Green
+      Write-Host "Next: open WireGuard for Windows -> Import tunnel(s) from file -> select $outputFile" -ForegroundColor Yellow
+      exit 0
+    }
+  }
+  if (-not $InteractiveSsh) {
     throw "Failed to download profile. Check SSH key access for '$ServerSsh', profile name '$ClientName', or retry with -InteractiveSsh."
   }
   throw "Failed to download profile. Check SSH credentials for '$ServerSsh' and profile name '$ClientName'."

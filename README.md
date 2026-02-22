@@ -23,7 +23,7 @@ curl -fsSL https://raw.githubusercontent.com/lcfranca/netlab-wireguard-coredns-b
 Windows fallback profile downloader:
 
 ```powershell
-$u='https://raw.githubusercontent.com/lcfranca/netlab-wireguard-coredns-basic/main/fetch-wireguard-conf.ps1'; $s=Join-Path $env:TEMP 'fetch-wireguard-conf.ps1'; Invoke-WebRequest -UseBasicParsing -Uri $u -OutFile $s; & $s -ServerSsh subtilizer@172.25.242.222 -ClientName client-demo -Interface wg0
+$u="https://raw.githubusercontent.com/lcfranca/netlab-wireguard-coredns-basic/main/fetch-wireguard-conf.ps1?v=$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())"; $s=Join-Path $env:TEMP 'fetch-wireguard-conf.ps1'; Remove-Item $s -Force -ErrorAction SilentlyContinue; Invoke-WebRequest -UseBasicParsing -Uri $u -OutFile $s; & $s -ServerSsh subtilizer@172.25.242.222 -ClientName client-demo -Interface wg0
 ```
 
 Linux/macOS fallback profile downloader:

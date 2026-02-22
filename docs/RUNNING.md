@@ -179,7 +179,7 @@ Windows fallback: download `.conf` directly (no login/password prompt):
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass -Force
-$u='https://raw.githubusercontent.com/lcfranca/netlab-wireguard-coredns-basic/main/fetch-wireguard-conf.ps1'; $s=Join-Path $env:TEMP 'fetch-wireguard-conf.ps1'; Invoke-WebRequest -UseBasicParsing -Uri $u -OutFile $s; & $s -ServerSsh subtilizer@172.25.242.222 -ClientName client-demo -Interface wg0
+$u="https://raw.githubusercontent.com/lcfranca/netlab-wireguard-coredns-basic/main/fetch-wireguard-conf.ps1?v=$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())"; $s=Join-Path $env:TEMP 'fetch-wireguard-conf.ps1'; Remove-Item $s -Force -ErrorAction SilentlyContinue; Invoke-WebRequest -UseBasicParsing -Uri $u -OutFile $s; & $s -ServerSsh subtilizer@172.25.242.222 -ClientName client-demo -Interface wg0
 ```
 
 Linux/macOS fallback: download `.conf` directly (no login/password prompt):
@@ -194,7 +194,8 @@ Notes:
 - Then import that file in WireGuard for Windows and activate the tunnel.
 - Linux/macOS output file is `~/.config/netlab-wireguard/wg0.conf`.
 - `-ServerSsh`/`--server-ssh` is the SSH account on server (for example, `subtilizer@...`), not the app login user (`demo`/`ops`).
-- If your Windows host has no authorized SSH key, use `-InteractiveSsh` (PowerShell) or `--interactive-ssh` (Linux/macOS) to allow SSH password prompt.
+- PowerShell script auto-retries with interactive SSH password prompt if key-based auth fails.
+- You can still force interactive mode with `-InteractiveSsh` (PowerShell) or `--interactive-ssh` (Linux/macOS).
 
 Optional debug mode (for troubleshooting only):
 
