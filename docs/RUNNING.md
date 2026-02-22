@@ -175,6 +175,19 @@ Windows browser DNS note:
 - `service1.intranet.local` resolves only when WireGuard tunnel is active and using DNS `10.0.0.1`.
 - If you see `DNS_PROBE_FINISHED_NXDOMAIN`, import generated profile into WireGuard Windows UI and activate the tunnel first.
 
+Windows fallback: download `.conf` directly (no login/password prompt):
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass -Force
+cd netlab-wireguard-coredns-basic
+.\fetch-wireguard-conf.ps1 -ServerSsh subtilizer@172.25.242.222 -ClientName demo-client -Interface wg0
+```
+
+Notes:
+- `-ClientName` must match the server profile name at `/opt/netlab/wg-clients/<client-name>.conf`.
+- The script stores the profile in `%USERPROFILE%\\.config\\netlab-wireguard\\wg0.conf`.
+- Then import that file in WireGuard for Windows and activate the tunnel.
+
 Optional debug mode (for troubleshooting only):
 
 ```bash
