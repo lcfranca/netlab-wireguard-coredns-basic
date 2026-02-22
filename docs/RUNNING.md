@@ -176,6 +176,7 @@ Troubleshooting authentication failures:
 Windows browser DNS note:
 - `service1.intranet.local` resolves only when WireGuard tunnel is active and using DNS `10.0.0.1`.
 - If you see `DNS_PROBE_FINISHED_NXDOMAIN`, import generated profile into WireGuard Windows UI and activate the tunnel first.
+- The PowerShell downloader now validates route installation first, then tests DNS directly against `10.0.0.1` before HTTP checks.
 
 Windows single-command connect (downloads profile + activates tunnel):
 
@@ -197,11 +198,20 @@ Notes:
 - If Windows DNS does not resolve `service1.intranet.local` immediately, the script applies hosts fallback (`10.0.0.1 service1.intranet.local`) and flushes DNS cache.
 - Use `-SkipHostsFallback` to disable this behavior.
 - If the existing tunnel service is stale, the script automatically reinstalls the `wg0` tunnel service.
-- Run PowerShell as Administrator for best results (required for hosts-file fallback).
+- Run PowerShell as Administrator for best results (required for adapter DNS configuration and hosts-file fallback).
 - Linux/macOS output file is `~/.config/netlab-wireguard/wg0.conf`.
 - `-ServerSsh`/`--server-ssh` is the SSH account on server (for example, `subtilizer@...`), not the app login user (`demo`/`ops`).
 - PowerShell script auto-retries with interactive SSH password prompt if key-based auth fails.
 - You can still force interactive mode with `-InteractiveSsh` (PowerShell) or `--interactive-ssh` (Linux/macOS).
+
+Windows/WSL resolver note:
+- Browser resolution on Windows depends on the Windows DNS stack, not WSL `/etc/resolv.conf`.
+- Validate tunnel DNS from Windows PowerShell with:
+
+```powershell
+nslookup service1.intranet.local 10.0.0.1
+Get-NetRoute | Where-Object DestinationPrefix -like "10.*"
+```
 
 Optional debug mode (for troubleshooting only):
 
@@ -260,6 +270,21 @@ Expected results:
 - Client connects to VPN (`wg show` shows handshake)
 - Client resolves `service1.intranet.local`
 - Client reaches the container over intranet path
+
+### Server-side verification (quick)
+
+Run on the server via SSH:
+
+```bash
+sudo wg show
+sudo ss -luntp | grep -E ':53\b|:51820\b|10\.0\.0\.1:80\b'
+sudo ufw status verbose || sudo iptables -S
+```
+
+Checkpoints:
+- `wg show` should report `interface: wg0` and recent peer handshake(s).
+- Listener check should show DNS on `:53` (CoreDNS), WireGuard on `:51820`, and HTTP only on `10.0.0.1:80`.
+- Firewall must allow WireGuard UDP `51820` and VPN-side traffic to DNS/HTTP over the tunnel.
 
 If you see `ssh: connect to host ... timed out`:
 1. Edit `infra/terraform/terraform.tfvars` and replace placeholder IPs (`203.0.113.x`) with real reachable host IPs.
