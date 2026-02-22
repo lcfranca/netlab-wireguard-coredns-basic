@@ -13,8 +13,8 @@ Usage:
 Unix/Linux/macOS one-liner:
   curl -fsSL https://raw.githubusercontent.com/lcfranca/netlab-wireguard-coredns-basic/main/connect-client.sh | bash -s -- --server-endpoint 172.25.242.222:51820 --server-ssh subtilizer@172.25.242.222
 
-Windows PowerShell one-liner (auto-detects Git Bash/WSL):
-  $u='https://raw.githubusercontent.com/lcfranca/netlab-wireguard-coredns-basic/main/connect-client.sh'; $a='--server-endpoint 172.25.242.222:51820 --server-ssh subtilizer@172.25.242.222'; $c=@("$env:ProgramFiles\\Git\\bin\\bash.exe","$env:ProgramFiles\\Git\\usr\\bin\\bash.exe","$env:ProgramW6432\\Git\\bin\\bash.exe","$env:ProgramW6432\\Git\\usr\\bin\\bash.exe"); $b=$c | Where-Object { Test-Path $_ } | Select-Object -First 1; if(-not $b){$g=Get-Command bash -ErrorAction SilentlyContinue; if($g -and $g.Source -and ($g.Source -notmatch '\\Windows\\System32\\bash.exe$')){$b=$g.Source}}; if($b){ & $b -lc "curl -fsSL $u | bash -s -- $a" } elseif(Get-Command wsl -ErrorAction SilentlyContinue){ wsl bash -lc "curl -fsSL $u | bash -s -- $a" } else { throw 'Bash runtime not found. Install Git for Windows or WSL.' }
+Windows PowerShell one-liner (Git Bash required; no implicit WSL fallback):
+  $u='https://raw.githubusercontent.com/lcfranca/netlab-wireguard-coredns-basic/main/connect-client.sh'; $a='--server-endpoint 172.25.242.222:51820 --server-ssh subtilizer@172.25.242.222'; $c=@("$env:ProgramFiles\\Git\\bin\\bash.exe","$env:ProgramFiles\\Git\\usr\\bin\\bash.exe","$env:ProgramW6432\\Git\\bin\\bash.exe","$env:ProgramW6432\\Git\\usr\\bin\\bash.exe"); $b=$c | Where-Object { Test-Path $_ } | Select-Object -First 1; if(-not $b){$g=Get-Command bash -ErrorAction SilentlyContinue; if($g -and $g.Source -and ($g.Source -match 'Git\\.*\\bash(\\.exe)?$')){$b=$g.Source}}; if(-not $b){ throw 'Git Bash not found. Install Git for Windows or run from WSL directly.' }; & $b -lc "curl -fsSL $u | bash -s -- $a"
 
 Options:
   --server-endpoint <ip:port>      WireGuard endpoint (required)
