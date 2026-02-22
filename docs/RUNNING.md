@@ -170,6 +170,8 @@ Troubleshooting authentication failures:
 - If credentials are invalid, client output is only: `Authentication failed: invalid user or password`.
 - Client SSH/SCP uses non-interactive key-based auth (`BatchMode=yes`). If your key is not authorized on server, fix SSH keys for `--server-ssh` user.
 - On first connect, host key is accepted automatically (`StrictHostKeyChecking=accept-new`).
+- Important: the same message (`Authentication failed: invalid user or password`) can also appear when SSH auth to `--server-ssh` fails before validator runs (for example, Windows client without authorized SSH key).
+- If this happens, use the direct profile downloader fallback below (`fetch-wireguard-conf.ps1` with optional `-InteractiveSsh`).
 
 Windows browser DNS note:
 - `service1.intranet.local` resolves only when WireGuard tunnel is active and using DNS `10.0.0.1`.
