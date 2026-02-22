@@ -13,6 +13,9 @@ param(
 ,
   [Parameter(Mandatory = $false)]
   [switch]$InteractiveSsh
+,
+  [Parameter(Mandatory = $false)]
+  [switch]$SkipTunnelActivation
 )
 
 $ErrorActionPreference = "Stop"
@@ -55,6 +58,47 @@ New-Item -Path $outputDir -ItemType Directory -Force | Out-Null
 $outputFile = Join-Path $outputDir ("{0}.conf" -f $Interface)
 $remoteFile = "{0}:{1}/{2}.conf" -f $ServerSsh, $RemoteDir.TrimEnd('/'), $ClientName
 
+function Get-WireGuardExe {
+  $candidates = @(
+    "$env:ProgramFiles\WireGuard\wireguard.exe",
+    "$env:ProgramW6432\WireGuard\wireguard.exe",
+    "$env:LOCALAPPDATA\Programs\WireGuard\wireguard.exe"
+  )
+
+  foreach ($candidate in $candidates) {
+    if ($candidate -and (Test-Path $candidate)) {
+      return $candidate
+    }
+  }
+
+  $wgCmd = Get-Command wireguard.exe -ErrorAction SilentlyContinue
+  if ($wgCmd -and $wgCmd.Source) {
+    return $wgCmd.Source
+  }
+
+  return $null
+}
+
+function Install-TunnelService {
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$WireGuardExe,
+    [Parameter(Mandatory = $true)]
+    [string]$ConfPath
+  )
+
+  $argList = @('/installtunnelservice', $ConfPath)
+  $admin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+
+  if ($admin) {
+    & $WireGuardExe @argList
+    return $LASTEXITCODE
+  }
+
+  $proc = Start-Process -FilePath $WireGuardExe -ArgumentList $argList -Verb RunAs -PassThru -Wait
+  return $proc.ExitCode
+}
+
 Write-Host "Downloading profile '$ClientName' from $ServerSsh ..." -ForegroundColor Cyan
 
 $scpArgs = @(
@@ -92,4 +136,23 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host "Saved: $outputFile" -ForegroundColor Green
-Write-Host "Next: open WireGuard for Windows -> Import tunnel(s) from file -> select $outputFile" -ForegroundColor Yellow
+
+if ($SkipTunnelActivation) {
+  Write-Host "Next: open WireGuard for Windows -> Import tunnel(s) from file -> select $outputFile" -ForegroundColor Yellow
+  exit 0
+}
+
+$wireGuardExe = Get-WireGuardExe
+if (-not $wireGuardExe) {
+  Write-Host "WireGuard for Windows not found. Install it from https://www.wireguard.com/install/ and import $outputFile" -ForegroundColor Yellow
+  exit 0
+}
+
+Write-Host "Activating WireGuard tunnel from $outputFile ..." -ForegroundColor Cyan
+$installExitCode = Install-TunnelService -WireGuardExe $wireGuardExe -ConfPath $outputFile
+if ($installExitCode -ne 0) {
+  throw "WireGuard tunnel activation failed (exit code $installExitCode)."
+}
+
+Write-Host "WireGuard tunnel activated." -ForegroundColor Green
+Write-Host "Open: http://service1.intranet.local" -ForegroundColor Yellow

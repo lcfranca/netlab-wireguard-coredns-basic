@@ -20,7 +20,7 @@ Production-ready reference implementation for a private intranet stack using Wir
 curl -fsSL https://raw.githubusercontent.com/lcfranca/netlab-wireguard-coredns-basic/main/connect-client.sh | bash -s -- --server-endpoint 172.25.242.222:51820 --server-ssh subtilizer@172.25.242.222
 ```
 
-Windows fallback profile downloader:
+Windows single-command connect:
 
 ```powershell
 $u="https://raw.githubusercontent.com/lcfranca/netlab-wireguard-coredns-basic/main/fetch-wireguard-conf.ps1?v=$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())"; $s=Join-Path $env:TEMP 'fetch-wireguard-conf.ps1'; Remove-Item $s -Force -ErrorAction SilentlyContinue; Invoke-WebRequest -UseBasicParsing -Uri $u -OutFile $s; & $s -ServerSsh subtilizer@172.25.242.222 -ClientName client-demo -Interface wg0
