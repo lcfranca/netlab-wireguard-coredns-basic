@@ -179,14 +179,20 @@ Windows fallback: download `.conf` directly (no login/password prompt):
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass -Force
-cd netlab-wireguard-coredns-basic
-.\fetch-wireguard-conf.ps1 -ServerSsh subtilizer@172.25.242.222 -ClientName demo-client -Interface wg0
+$u='https://raw.githubusercontent.com/lcfranca/netlab-wireguard-coredns-basic/main/fetch-wireguard-conf.ps1'; $s=Join-Path $env:TEMP 'fetch-wireguard-conf.ps1'; Invoke-WebRequest -UseBasicParsing -Uri $u -OutFile $s; & $s -ServerSsh subtilizer@172.25.242.222 -ClientName demo-client -Interface wg0
+```
+
+Linux/macOS fallback: download `.conf` directly (no login/password prompt):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lcfranca/netlab-wireguard-coredns-basic/main/fetch-wireguard-conf.sh | bash -s -- --server-ssh subtilizer@172.25.242.222 --client-name demo-client --interface wg0
 ```
 
 Notes:
 - `-ClientName` must match the server profile name at `/opt/netlab/wg-clients/<client-name>.conf`.
 - The script stores the profile in `%USERPROFILE%\\.config\\netlab-wireguard\\wg0.conf`.
 - Then import that file in WireGuard for Windows and activate the tunnel.
+- Linux/macOS output file is `~/.config/netlab-wireguard/wg0.conf`.
 
 Optional debug mode (for troubleshooting only):
 
